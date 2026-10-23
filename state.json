@@ -189,7 +189,25 @@
       "release": null,
       "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
       "expectedDev": "",
-      "publish": false
+      "publish": false,
+      "mirrorSha": "66ee628e0875b2b735b199f42e6151e347833637",
+      "sources": {
+        "schema": 1,
+        "automationSha": "5abf1dd947bd49a2761573386faf66266d4bc21a",
+        "manifestSha256": "c29c14d52fea1373824cab5720867af7903150b8e0c0ccd0827b058206207f20",
+        "upstream": {
+          "repository": "https://github.com/pingdotgg/t3code.git",
+          "sha": "66ee628e0875b2b735b199f42e6151e347833637",
+          "release": null
+        },
+        "features": [],
+        "distribution": {
+          "sha256": "91e86847d15f113543d75758a0194212fab775004c35206f0d41561bac845476",
+          "status": "applied"
+        },
+        "assembledSha": "df3067f7121cbc9ef1e8f7fd3fe0906264917b3d",
+        "treeSha": "f2a898389008e4ba2553e61c2f753017a57015cc"
+      }
     }
   }
 }
