@@ -10,6 +10,7 @@ import {
   assertFastForward,
   guardedPush,
   selectRelease,
+  promotionUpdates,
 } from "../scripts/pipeline.mjs";
 
 const automationSha = "a".repeat(40);
@@ -185,4 +186,51 @@ test("release polling deduplicates IDs and retries failures, ignoring previews a
   );
   assert.throws(() => selectRelease(releases, {}, "v0.1.3"), /not a stable/);
   assert.equal(selectRelease(releases, {}, "1").tag_name, "v0.1.1");
+});
+
+test("release tags preserve newer dev, while development promotion uses pinned main", (t) => {
+  const f = fixture(t);
+  const newer = f.commit("value.txt", "newer upstream main\n");
+  git(f.source, ["branch", "dev", newer]);
+  const remote = join(f.root, "fork.git");
+  git(f.root, ["clone", "-q", "--bare", f.source, remote]);
+  f.manifest([], newer);
+  const release = f.build("release", { sourceRef: f.base, release: { id: 123, tag: "v0.1.2" } });
+  assert.equal(release.upstream.sha, f.base);
+  const releaseCwd = join(f.root, "release");
+  git(releaseCwd, ["fetch", f.source, newer]);
+  guardedPush(
+    releaseCwd,
+    remote,
+    promotionUpdates(
+      {
+        expectedMain: newer,
+        expectedDev: newer,
+        sources: release,
+        release: { id: 123 },
+        publish: true,
+        version: "1.0.2",
+      },
+      newer,
+    ),
+  );
+  assert.equal(remoteSha(f.root, remote, "refs/heads/dev"), newer);
+  assert.equal(remoteSha(f.root, remote, "refs/tags/v1.0.2"), release.assembledSha);
+  const development = f.build("development");
+  assert.equal(development.upstream.sha, newer);
+  guardedPush(
+    join(f.root, "development"),
+    remote,
+    promotionUpdates(
+      {
+        expectedMain: newer,
+        expectedDev: newer,
+        sources: development,
+        release: null,
+        publish: false,
+      },
+      newer,
+    ),
+  );
+  assert.equal(remoteSha(f.root, remote, "refs/heads/dev"), development.assembledSha);
 });

@@ -8,12 +8,13 @@ The initial feature list is empty. A separate distribution patch keeps CLI relea
 - `main` mirrors `pingdotgg/t3code:main`. Automation permits only fast-forward updates and uses an explicit lease.
 - `feature/*` holds curated changes. External repositories and pull-request refs can also supply patches.
 - `patch` holds the manifest, distribution patch, tooling, and workflows. Set it as the fork's default branch.
-- `dev` contains generated source. Do not edit it. Automation replaces it with an explicit lease after all build checks pass.
+- `dev` contains generated source. Do not edit it. After development build checks pass, automation replaces it with an explicit lease.
 - `patch-state` contains machine-owned release IDs, version reservations, results, and exact source records. Do not reset or delete it.
 
 Development validation resolves `manifest.json`'s upstream ref, or the manual `source_ref`, to an immutable commit.
 Published builds require a stable upstream release. They resolve that release's tag instead of building a newer `main`.
 Main mirroring uses its own pinned upstream main commit, independent of the release source.
+Release builds preserve `dev`; they do not replace its newer main-based source with an older release tag.
 
 Every build records the automation commit, manifest digest, upstream commit, feature base/head commits, and distribution patch digest.
 `PATCH-SOURCES.json` travels with generated source. `provenance.json` and the original manifest travel with release assets.
@@ -93,7 +94,7 @@ Upstream does not support a macOS x64 CLI executable.
 
 The workflow serializes runs, checks the current automation tip, and uses atomic pushes with explicit branch leases.
 A divergent fork `main` stops promotion. A changed `dev` stops promotion. Neither branch is silently overwritten.
-After all targets pass, the workflow checks required assets and their updater hashes, then promotes generated source.
+After all targets pass, the workflow checks required assets and their updater hashes, then promotes the appropriate source refs.
 Publication creates a draft, uploads the complete asset list, and makes the release public only after successful uploads.
 An interrupted upload can leave a draft for operator inspection. It does not become a public partial release.
 

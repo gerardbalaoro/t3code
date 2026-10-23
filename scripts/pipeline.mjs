@@ -50,6 +50,25 @@ export function guardedPush(cwd, repository, updates) {
     ...updates.map(({ ref, sha }) => `${sha}:${ref}`),
   ]);
 }
+// Release artifacts use their triggering tag. Only development validation replaces dev.
+export function promotionUpdates(entry, mirrorSha) {
+  const updates = [{ ref: "refs/heads/main", expected: entry.expectedMain, sha: mirrorSha }];
+  if (!entry.release) {
+    updates.push({
+      ref: "refs/heads/dev",
+      expected: entry.expectedDev,
+      sha: entry.sources.assembledSha,
+    });
+  }
+  if (entry.publish) {
+    updates.push({
+      ref: `refs/tags/v${entry.version}`,
+      expected: "",
+      sha: entry.sources.assembledSha,
+    });
+  }
+  return updates;
+}
 function gh(args) {
   return run("gh", args);
 }
@@ -236,16 +255,7 @@ async function finish(cwd) {
   const mirrorSha = resolve(source, `https://github.com/${UPSTREAM}.git`, entry.mirrorSha);
   if (entry.expectedMain) resolve(source, FORK_URL, entry.expectedMain);
   assertFastForward(source, entry.expectedMain, mirrorSha);
-  const updates = [
-    { ref: "refs/heads/main", expected: entry.expectedMain, sha: mirrorSha },
-    { ref: "refs/heads/dev", expected: entry.expectedDev, sha: entry.sources.assembledSha },
-  ];
-  if (entry.publish)
-    updates.push({
-      ref: `refs/tags/v${entry.version}`,
-      expected: "",
-      sha: entry.sources.assembledSha,
-    });
+  const updates = promotionUpdates(entry, mirrorSha);
   // The shallow source includes the generated commit but not its upstream parent.
   resolve(source, `https://github.com/${UPSTREAM}.git`, entry.sources.upstream.sha);
   rmSync(join(source, ".git", "shallow"), { force: true });
