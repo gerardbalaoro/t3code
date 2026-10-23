@@ -182,7 +182,7 @@
   },
   "runs": {
     "39978420151-1": {
-      "status": "building",
+      "status": "failed",
       "automationSha": "5abf1dd947bd49a2761573386faf66266d4bc21a",
       "version": "1.0.1",
       "runId": "39978420151-1",
