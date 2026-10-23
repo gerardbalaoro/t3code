@@ -89,3 +89,23 @@ test("a different manifest rejects provenance", async (t) => {
   writeFileSync(join(f.directory, "manifest.json"), '{"features":["wrong"]}');
   await assert.rejects(validateAssets(f), /Manifest digest mismatch/);
 });
+
+test("validates AppImage blockMapSize without changing the shipped Linux feed", async (t) => {
+  const f = fixture(t);
+  const path = join(f.directory, "latest-linux.yml");
+  const raw = readFileSync(path, "utf8").replace(/(    size: \d+\n)/, "$1    blockMapSize: 13\n");
+  writeFileSync(path, raw);
+  await validateAssets(f);
+  assert.equal(readFileSync(path, "utf8"), raw);
+});
+
+test("rejects an AppImage blockmap larger than its archive", async (t) => {
+  const f = fixture(t);
+  const path = join(f.directory, "latest-linux-arm64.yml");
+  const raw = readFileSync(path, "utf8").replace(
+    /(    size: \d+\n)/,
+    "$1    blockMapSize: 99999\n",
+  );
+  writeFileSync(path, raw);
+  await assert.rejects(validateAssets(f), /invalid AppImage blockMapSize/);
+});

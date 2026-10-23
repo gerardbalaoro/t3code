@@ -69,7 +69,37 @@ export async function validateAssets({ directory, sourceRoot, version }) {
     ["latest-linux.yml", ["x86_64"], "AppImage"],
     ["latest-linux-arm64.yml", ["arm64"], "AppImage"],
   ]) {
-    const manifest = parseUpdateManifest(readFileSync(join(directory, name), "utf8"), name, name);
+    const raw = readFileSync(join(directory, name), "utf8");
+    // Upstream's mac/Windows parser does not model AppImage's embedded blockmap.
+    // Check that field separately, and preserve the original Linux feed bytes.
+    const blockMaps = new Map();
+    let fileIndex = -1;
+    const parserInput = name.startsWith("latest-linux")
+      ? raw
+          .split(/\r?\n/)
+          .map((line) => {
+            if (/^  - url:/.test(line)) fileIndex++;
+            if (!/^    blockMapSize:/.test(line)) return line;
+            const size = Number(/^    blockMapSize: (\d+)$/.exec(line)?.[1]);
+            if (
+              !Number.isSafeInteger(size) ||
+              size <= 0 ||
+              fileIndex < 0 ||
+              blockMaps.has(fileIndex)
+            ) {
+              throw new Error(`${name}: invalid AppImage blockMapSize`);
+            }
+            blockMaps.set(fileIndex, size);
+            return "";
+          })
+          .join("\n")
+      : raw;
+    const manifest = parseUpdateManifest(parserInput, name, name);
+    for (const [index, size] of blockMaps) {
+      if (!manifest.files[index]?.url.endsWith(".AppImage") || size > manifest.files[index].size) {
+        throw new Error(`${name}: invalid AppImage blockMapSize`);
+      }
+    }
     if (manifest.version !== version) throw new Error(`${name}: version mismatch`);
     for (const arch of arches)
       if (!manifest.files.some((file) => file.url === `T3-Code-${version}-${arch}.${extension}`))
