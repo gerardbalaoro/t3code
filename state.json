@@ -176,7 +176,7 @@
       "tag": "v0.1.1"
     },
     "421183694": {
-      "status": "building",
+      "status": "failed",
       "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
       "version": "1.0.4",
       "runId": "40027083829-1",
@@ -306,7 +306,7 @@
       }
     },
     "40027083829-1": {
-      "status": "building",
+      "status": "failed",
       "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
       "version": "1.0.4",
       "runId": "40027083829-1",
