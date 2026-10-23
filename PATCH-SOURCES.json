@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
+  "manifestSha256": "c29c14d52fea1373824cab5720867af7903150b8e0c0ccd0827b058206207f20",
+  "upstream": {
+    "repository": "https://github.com/pingdotgg/t3code.git",
+    "sha": "66ee628e0875b2b735b199f42e6151e347833637",
+    "release": null
+  },
+  "features": [],
+  "distribution": {
+    "sha256": "91e86847d15f113543d75758a0194212fab775004c35206f0d41561bac845476",
+    "status": "applied"
+  }
+}
