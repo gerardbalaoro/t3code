@@ -1,0 +1,54 @@
+diff --git a/apps/server/src/cli/update.test.ts b/apps/server/src/cli/update.test.ts
+index e6a6eb5ee1dbfc7770d9383200cab117c3e07373..1fbbc6926aebb305c4d8503f6f5e47a09beb1062 100644
+--- a/apps/server/src/cli/update.test.ts
++++ b/apps/server/src/cli/update.test.ts
+@@ -18,7 +18,7 @@ it.effect("authenticates each release page until the requested channel is found"
+     const httpClient = HttpClient.make((request) => {
+       const url = new URL(request.url);
+       assert.equal(url.origin, "https://api.github.com");
+-      assert.equal(url.pathname, "/repos/pingdotgg/t3code/releases");
++      assert.equal(url.pathname, "/repos/gerardbalaoro/t3code/releases");
+       assert.equal(request.headers.accept, "application/vnd.github+json");
+       assert.equal(request.headers.authorization, "Bearer gh-token");
+       const page = url.searchParams.get("page") ?? "";
+diff --git a/packages/shared/src/cliRelease.test.ts b/packages/shared/src/cliRelease.test.ts
+index b0aa61765e45a7f98d2059c315e8260b4e6fef81..d4a05357066dcec613c242b74950f2749aa14836 100644
+--- a/packages/shared/src/cliRelease.test.ts
++++ b/packages/shared/src/cliRelease.test.ts
+@@ -1,8 +1,25 @@
+ import { describe, expect, it } from "vite-plus/test";
+ 
+-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
++import {
++  CLI_RELEASES_PAGE_URL,
++  cliArchiveTarCommand,
++  cliReleaseDownloadBaseUrl,
++  cliReleaseIndexPageUrl,
++  newestCliReleaseVersion,
++  parseChecksums,
++} from "./cliRelease.ts";
+ 
+ describe("cliRelease", () => {
++  it("keeps release discovery and downloads on Gerard's distribution", () => {
++    expect(CLI_RELEASES_PAGE_URL).toBe("https://github.com/gerardbalaoro/t3code/releases");
++    expect(cliReleaseIndexPageUrl(2)).toBe(
++      "https://api.github.com/repos/gerardbalaoro/t3code/releases?per_page=100&page=2",
++    );
++    expect(cliReleaseDownloadBaseUrl("1.0.1")).toBe(
++      "https://github.com/gerardbalaoro/t3code/releases/download/v1.0.1",
++    );
++  });
++
+   it("parses sha256sum output including binary-mode markers", () => {
+     const checksums = parseChecksums(
+       [
+diff --git a/packages/shared/src/cliRelease.ts b/packages/shared/src/cliRelease.ts
+index 22476c632df20d1e9b4bb40d7f5d70a9edf25dc4..104550b8b6aae4431d61511dff17a463254c7175 100644
+--- a/packages/shared/src/cliRelease.ts
++++ b/packages/shared/src/cliRelease.ts
+@@ -1,4 +1,4 @@
+-const CLI_RELEASE_REPOSITORY = "pingdotgg/t3code";
++const CLI_RELEASE_REPOSITORY = "gerardbalaoro/t3code";
+ export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
+ export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
+ export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";

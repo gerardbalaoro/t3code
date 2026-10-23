@@ -1,0 +1,295 @@
+name: Distribute patches
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_release:
+        description: "Stable upstream release tag or ID. Empty means development validation."
+        type: string
+        default: ""
+      source_ref:
+        description: "Development source ref/SHA. Ignored for upstream releases."
+        type: string
+        default: ""
+      publish:
+        description: "Publish after all six desktop targets and five CLI archives pass (requires upstream_release)."
+        type: boolean
+        default: false
+
+# One reservation/build/promotion at a time, including manual and scheduled runs.
+concurrency:
+  group: gerard-patch-distribution
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  T3CODE_DESKTOP_UPDATE_REPOSITORY: gerardbalaoro/t3code
+
+jobs:
+  assemble:
+    if: github.repository == 'gerardbalaoro/t3code' && github.ref == 'refs/heads/patch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      build: ${{ steps.prepare.outputs.build }}
+      version: ${{ steps.prepare.outputs.version }}
+      clerk_publishable_key: ${{ steps.prepare.outputs.t3code_clerk_publishable_key }}
+      clerk_jwt_template: ${{ steps.prepare.outputs.t3code_clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ steps.prepare.outputs.t3code_clerk_cli_oauth_client_id }}
+      relay_url: ${{ steps.prepare.outputs.t3code_relay_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Authenticate fork Git operations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
+      - name: Test standalone tooling
+        run: npm test && npm run check
+      - name: Reserve version and assemble immutable source
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_RELEASE: ${{ inputs.upstream_release }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          PUBLISH: ${{ github.event_name == 'schedule' && vars.PATCH_RELEASES_ENABLED == 'true' || inputs.publish }}
+        run: node scripts/pipeline.mjs prepare
+      - uses: actions/upload-artifact@v7
+        if: steps.prepare.outputs.build == 'true'
+        with:
+          name: assembled-source
+          path: .output/source.tar
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: steps.prepare.outputs.build == 'true'
+        with:
+          name: source-records
+          path: |
+            .output/provenance.json
+            .output/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  bundle:
+    needs: assemble
+    if: needs.assemble.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: automation
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: assembled-source
+          path: source-input
+      - run: tar -xf source-input/source.tar
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+      - name: Load upstream public production Connect settings
+        run: node automation/scripts/pipeline.mjs connect
+      - name: Install bundle dependencies
+        run: vp install
+      - name: Fetch the source parent for changed-file checks
+        run: |
+          source_sha=$(node -p "JSON.parse(require('fs').readFileSync('PATCH-SOURCES.json')).upstream.sha")
+          git fetch --no-tags https://github.com/pingdotgg/t3code.git "$source_sha"
+          rm -f .git/shallow
+          printf '/automation/\n/source-input/\n' >> .git/info/exclude
+      - name: Check distribution source changes
+        # Shared release URLs also affect the server; check:changed selects dependents.
+        # No repo-wide suites are run by this distribution workflow.
+        run: vp run check:changed "$(node -p "JSON.parse(require('fs').readFileSync('PATCH-SOURCES.json')).upstream.sha")"
+      - name: Test asset validation against the selected upstream parser
+        run: PATCH_TEST_SOURCE="$PWD" node --test automation/test/assets.integration.mjs
+      - name: Align release package versions
+        env:
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: node scripts/update-release-package-versions.ts "$VERSION"
+      - name: Install native helper build libraries
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+      - name: Build server, bundled web client, and Electron main
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: vp run build:desktop
+      - uses: actions/upload-artifact@v7
+        with:
+          name: js-bundle
+          path: |
+            apps/server/dist
+            apps/desktop/dist-electron
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop:
+    name: Desktop ${{ matrix.label }}
+    needs: [assemble, bundle]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {
+              label: "macOS arm64",
+              runner: macos-15,
+              platform: mac,
+              target: dmg,
+              arch: arm64,
+              rust_target: aarch64-apple-darwin,
+              resource_key: darwin-arm64,
+              cli_archive: true,
+              verify_runner: "",
+            }
+          - {
+              label: "macOS x64",
+              runner: macos-15-intel,
+              platform: mac,
+              target: dmg,
+              arch: x64,
+              rust_target: x86_64-apple-darwin,
+              resource_key: darwin-x64,
+              cli_archive: false,
+              verify_runner: "",
+            }
+          - {
+              label: "Linux x64",
+              runner: ubuntu-24.04,
+              platform: linux,
+              target: AppImage,
+              arch: x64,
+              rust_target: x86_64-unknown-linux-gnu,
+              resource_key: linux-x64,
+              cli_archive: true,
+              verify_runner: "",
+            }
+          - {
+              label: "Linux arm64",
+              runner: ubuntu-24.04-arm,
+              platform: linux,
+              target: AppImage,
+              arch: arm64,
+              rust_target: aarch64-unknown-linux-gnu,
+              resource_key: linux-arm64,
+              cli_archive: true,
+              verify_runner: "",
+            }
+          - {
+              label: "Windows x64",
+              runner: ubuntu-24.04,
+              platform: win,
+              target: nsis,
+              arch: x64,
+              rust_target: x86_64-pc-windows-msvc,
+              resource_key: win32-x64,
+              cli_archive: true,
+              verify_runner: windows-2025,
+            }
+          - {
+              label: "Windows arm64",
+              runner: ubuntu-24.04,
+              platform: win,
+              target: nsis,
+              arch: arm64,
+              rust_target: aarch64-pc-windows-msvc,
+              resource_key: win32-arm64,
+              cli_archive: true,
+              verify_runner: windows-11-arm,
+            }
+    uses: ./.github/workflows/package-desktop.yml
+    with:
+      label: ${{ matrix.label }}
+      runner: ${{ matrix.runner }}
+      platform: ${{ matrix.platform }}
+      target: ${{ matrix.target }}
+      arch: ${{ matrix.arch }}
+      rust_target: ${{ matrix.rust_target }}
+      resource_key: ${{ matrix.resource_key }}
+      cli_archive: ${{ matrix.cli_archive }}
+      verify_runner: ${{ matrix.verify_runner }}
+      version: ${{ needs.assemble.outputs.version }}
+      release_channel: stable
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.assemble.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.assemble.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.assemble.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.assemble.outputs.relay_url }}
+    secrets: inherit
+
+  finish:
+    needs: [assemble, bundle, desktop]
+    if: always() && needs.assemble.result == 'success' && needs.assemble.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Authenticate fork Git operations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
+      - uses: actions/download-artifact@v8
+        if: needs.desktop.result == 'success'
+        with:
+          name: assembled-source
+          path: source-input
+      - name: Restore source
+        if: needs.desktop.result == 'success'
+        run: mkdir source && tar -xf source-input/source.tar -C source
+      - uses: actions/download-artifact@v8
+        if: needs.desktop.result == 'success'
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@v8
+        if: needs.desktop.result == 'success'
+        with:
+          pattern: cli-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@v8
+        if: needs.desktop.result == 'success'
+        with:
+          name: source-records
+          path: release-assets
+      - name: Merge updater feeds and check every required asset
+        if: needs.desktop.result == 'success'
+        id: assets
+        env:
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: node scripts/assets.mjs release-assets source "$VERSION"
+      - uses: actions/upload-artifact@v7
+        if: steps.assets.outcome == 'success'
+        with:
+          name: validated-release
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record result and promote only validated builds
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RESULT: ${{ needs.bundle.result == 'success' && needs.desktop.result == 'success' && steps.assets.outcome == 'success' && 'success' || 'failure' }}
+        run: node scripts/pipeline.mjs finish

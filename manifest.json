@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "upstream": {
+    "repository": "https://github.com/pingdotgg/t3code.git",
+    "ref": "refs/heads/main"
+  },
+  "features": []
+}

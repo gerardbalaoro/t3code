@@ -1,0 +1,22 @@
+name: Check patch tooling
+on:
+  push:
+    branches: [patch]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm test && npm run check
+      - name: Lint workflows
+        uses: docker://rhysd/actionlint:1.7.11
+        with:
+          args: "-color -shellcheck="
