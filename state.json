@@ -210,7 +210,7 @@
       }
     },
     "39981900707-1": {
-      "status": "building",
+      "status": "validated",
       "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
       "version": "1.0.2",
       "runId": "39981900707-1",
