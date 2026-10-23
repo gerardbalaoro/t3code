@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "nextSequence": 4,
+  "nextSequence": 5,
   "initialized": true,
   "releases": {
     "294147089": {
@@ -178,8 +178,8 @@
     "421183694": {
       "status": "building",
       "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
-      "version": "1.0.3",
-      "runId": "39982062402-1",
+      "version": "1.0.4",
+      "runId": "40027083829-1",
       "release": {
         "id": 421183694,
         "tag": "v0.1.2",
@@ -187,29 +187,7 @@
       },
       "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
       "expectedDev": "e248425ca95eda93428cc33b92ed833903df28c7",
-      "publish": true,
-      "mirrorSha": "66ee628e0875b2b735b199f42e6151e347833637",
-      "sources": {
-        "schema": 1,
-        "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
-        "manifestSha256": "c29c14d52fea1373824cab5720867af7903150b8e0c0ccd0827b058206207f20",
-        "upstream": {
-          "repository": "https://github.com/pingdotgg/t3code.git",
-          "sha": "044f07257c9684ae4543bd1e1ebf9c394e9e3830",
-          "release": {
-            "id": 421183694,
-            "tag": "v0.1.2",
-            "url": "https://github.com/pingdotgg/t3code/releases/tag/v0.1.2"
-          }
-        },
-        "features": [],
-        "distribution": {
-          "sha256": "91e86847d15f113543d75758a0194212fab775004c35206f0d41561bac845476",
-          "status": "applied"
-        },
-        "assembledSha": "98d6fa83844c8f656ec663be634cded21e69fc23",
-        "treeSha": "730faa272441a51adb53debad9a8cecb1752deff"
-      }
+      "publish": false
     }
   },
   "runs": {
@@ -304,6 +282,20 @@
         "assembledSha": "98d6fa83844c8f656ec663be634cded21e69fc23",
         "treeSha": "730faa272441a51adb53debad9a8cecb1752deff"
       }
+    },
+    "40027083829-1": {
+      "status": "building",
+      "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
+      "version": "1.0.4",
+      "runId": "40027083829-1",
+      "release": {
+        "id": 421183694,
+        "tag": "v0.1.2",
+        "url": "https://github.com/pingdotgg/t3code/releases/tag/v0.1.2"
+      },
+      "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
+      "expectedDev": "e248425ca95eda93428cc33b92ed833903df28c7",
+      "publish": false
     }
   }
 }
