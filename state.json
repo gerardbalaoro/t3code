@@ -1,0 +1,195 @@
+{
+  "schema": 1,
+  "nextSequence": 2,
+  "initialized": true,
+  "releases": {
+    "294147089": {
+      "status": "baseline",
+      "tag": "v0.0.2"
+    },
+    "294155360": {
+      "status": "baseline",
+      "tag": "v0.0.3"
+    },
+    "294227696": {
+      "status": "baseline",
+      "tag": "v0.0.4"
+    },
+    "294483515": {
+      "status": "baseline",
+      "tag": "v0.0.5"
+    },
+    "294515049": {
+      "status": "baseline",
+      "tag": "v0.0.7"
+    },
+    "294519777": {
+      "status": "baseline",
+      "tag": "v0.0.8"
+    },
+    "294650615": {
+      "status": "baseline",
+      "tag": "v0.0.9"
+    },
+    "295788544": {
+      "status": "baseline",
+      "tag": "v0.0.10"
+    },
+    "296515100": {
+      "status": "baseline",
+      "tag": "v0.0.11"
+    },
+    "299236454": {
+      "status": "baseline",
+      "tag": "v0.0.12"
+    },
+    "299239387": {
+      "status": "baseline",
+      "tag": "v0.0.13"
+    },
+    "300864639": {
+      "status": "baseline",
+      "tag": "v0.0.14"
+    },
+    "302792461": {
+      "status": "baseline",
+      "tag": "v0.0.15"
+    },
+    "307650900": {
+      "status": "baseline",
+      "tag": "v0.0.16"
+    },
+    "307719858": {
+      "status": "baseline",
+      "tag": "v0.0.17"
+    },
+    "310141764": {
+      "status": "baseline",
+      "tag": "v0.0.19"
+    },
+    "310148853": {
+      "status": "baseline",
+      "tag": "v0.0.20"
+    },
+    "312870470": {
+      "status": "baseline",
+      "tag": "v0.0.21"
+    },
+    "317561667": {
+      "status": "baseline",
+      "tag": "v0.0.22"
+    },
+    "320016113": {
+      "status": "baseline",
+      "tag": "v0.0.23"
+    },
+    "323048796": {
+      "status": "baseline",
+      "tag": "v0.0.24"
+    },
+    "334625807": {
+      "status": "baseline",
+      "tag": "v0.0.25"
+    },
+    "336779556": {
+      "status": "baseline",
+      "tag": "v0.0.26"
+    },
+    "336881931": {
+      "status": "baseline",
+      "tag": "v0.0.27"
+    },
+    "346540269": {
+      "status": "baseline",
+      "tag": "v0.0.28"
+    },
+    "360740840": {
+      "status": "baseline",
+      "tag": "v0.0.29"
+    },
+    "361456260": {
+      "status": "baseline",
+      "tag": "v0.0.30"
+    },
+    "362044063": {
+      "status": "baseline",
+      "tag": "v0.0.31"
+    },
+    "366714539": {
+      "status": "baseline",
+      "tag": "v0.0.32"
+    },
+    "367877408": {
+      "status": "baseline",
+      "tag": "v0.0.33"
+    },
+    "376857580": {
+      "status": "baseline",
+      "tag": "v0.0.34"
+    },
+    "377584868": {
+      "status": "baseline",
+      "tag": "v0.0.35"
+    },
+    "378824777": {
+      "status": "baseline",
+      "tag": "v0.0.36"
+    },
+    "379482486": {
+      "status": "baseline",
+      "tag": "v0.0.37"
+    },
+    "380855675": {
+      "status": "baseline",
+      "tag": "v0.0.38"
+    },
+    "383881414": {
+      "status": "baseline",
+      "tag": "v0.0.39"
+    },
+    "384367447": {
+      "status": "baseline",
+      "tag": "v0.0.40"
+    },
+    "389648286": {
+      "status": "baseline",
+      "tag": "v0.0.42"
+    },
+    "399449611": {
+      "status": "baseline",
+      "tag": "v0.0.43"
+    },
+    "399516923": {
+      "status": "baseline",
+      "tag": "v0.0.44"
+    },
+    "402051621": {
+      "status": "baseline",
+      "tag": "v0.0.45"
+    },
+    "414363655": {
+      "status": "baseline",
+      "tag": "v0.1.0"
+    },
+    "419076671": {
+      "status": "baseline",
+      "tag": "v0.1.1"
+    },
+    "421183694": {
+      "status": "baseline",
+      "tag": "v0.1.2"
+    }
+  },
+  "runs": {
+    "39978420151-1": {
+      "status": "building",
+      "automationSha": "5abf1dd947bd49a2761573386faf66266d4bc21a",
+      "version": "1.0.1",
+      "runId": "39978420151-1",
+      "release": null,
+      "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
+      "expectedDev": "",
+      "publish": false
+    }
+  }
+}
