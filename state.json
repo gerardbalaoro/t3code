@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "nextSequence": 2,
+  "nextSequence": 3,
   "initialized": true,
   "releases": {
     "294147089": {
@@ -208,6 +208,16 @@
         "assembledSha": "df3067f7121cbc9ef1e8f7fd3fe0906264917b3d",
         "treeSha": "f2a898389008e4ba2553e61c2f753017a57015cc"
       }
+    },
+    "39981900707-1": {
+      "status": "building",
+      "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
+      "version": "1.0.2",
+      "runId": "39981900707-1",
+      "release": null,
+      "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
+      "expectedDev": "",
+      "publish": false
     }
   }
 }
