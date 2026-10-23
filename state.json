@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "nextSequence": 3,
+  "nextSequence": 4,
   "initialized": true,
   "releases": {
     "294147089": {
@@ -176,8 +176,18 @@
       "tag": "v0.1.1"
     },
     "421183694": {
-      "status": "baseline",
-      "tag": "v0.1.2"
+      "status": "building",
+      "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
+      "version": "1.0.3",
+      "runId": "39982062402-1",
+      "release": {
+        "id": 421183694,
+        "tag": "v0.1.2",
+        "url": "https://github.com/pingdotgg/t3code/releases/tag/v0.1.2"
+      },
+      "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
+      "expectedDev": "e248425ca95eda93428cc33b92ed833903df28c7",
+      "publish": true
     }
   },
   "runs": {
@@ -236,6 +246,20 @@
         "assembledSha": "e248425ca95eda93428cc33b92ed833903df28c7",
         "treeSha": "5d8b81ccca5076823f2cb43e8c4f7182ce39ceb0"
       }
+    },
+    "39982062402-1": {
+      "status": "building",
+      "automationSha": "fef89c0dde3b6f93b45dd9c80f62edee29eef071",
+      "version": "1.0.3",
+      "runId": "39982062402-1",
+      "release": {
+        "id": 421183694,
+        "tag": "v0.1.2",
+        "url": "https://github.com/pingdotgg/t3code/releases/tag/v0.1.2"
+      },
+      "expectedMain": "66ee628e0875b2b735b199f42e6151e347833637",
+      "expectedDev": "e248425ca95eda93428cc33b92ed833903df28c7",
+      "publish": true
     }
   }
 }
