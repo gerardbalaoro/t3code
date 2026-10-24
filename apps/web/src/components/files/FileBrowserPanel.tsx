@@ -9,7 +9,8 @@ import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
-import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import { ChevronsDownUpIcon, ChevronsUpDownIcon, FilePlusIcon } from "lucide-react";
+import { useAtomValue } from "@effect/atom-react";
 import { type Ref, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -41,6 +42,9 @@ import { useDirectoryEntries } from "./useDirectoryEntries";
 import { useProjectPathSearch } from "~/state/queries";
 import { isMacPlatform } from "~/lib/utils";
 import { type PreviewAction, subscribePreviewAction } from "../preview/previewActionBus";
+import { projectEnvironment } from "~/state/projects";
+import { serverEnvironment } from "~/state/server";
+import { CreateFileDialog } from "./CreateFileDialog";
 
 interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
@@ -163,6 +167,10 @@ export default function FileBrowserPanel({
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
   const fileContextMenu = useFileContextMenu(environmentId);
+  const canWrite = useAtomValue(projectEnvironment.createFile.permissionAtom(environmentId));
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const canCreate = !hostFolder && canWrite && serverConfig?.workspaceFileCreation === true;
+  const [createDirectory, setCreateDirectory] = useState<string | null>(null);
   const {
     entries: directoryEntries,
     load,
@@ -211,6 +219,9 @@ export default function FileBrowserPanel({
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
           [
+            ...(canCreate && entryKinds.get(relativePath) === "directory"
+              ? [{ id: "new-file", label: "New file…" }]
+              : []),
             ...fileMenuItems,
             { id: "copy-mention", label: "Copy mention" },
             { id: "add-to-chat", label: "Add to chat" },
@@ -218,6 +229,10 @@ export default function FileBrowserPanel({
           position,
         );
         if (clicked === null) return;
+        if (clicked === "new-file") {
+          setCreateDirectory(relativePath);
+          return;
+        }
         // Open-with submenu ids are absent from the top-level item list.
         const isFileMenuAction =
           fileMenuItems.some((entry) => entry.id === clicked) || clicked.startsWith("editor:");
@@ -542,6 +557,31 @@ export default function FileBrowserPanel({
         data-surface-subheader
       >
         <RefreshFilesButton isPending={isPending} onRefresh={handleRefresh} />
+        {!hostFolder ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="New file"
+                  disabled={!canCreate}
+                  onClick={() => setCreateDirectory("")}
+                />
+              }
+            >
+              <FilePlusIcon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup>
+              {serverConfig?.workspaceFileCreation !== true
+                ? "Update this environment's server to create files"
+                : canWrite
+                  ? "New file"
+                  : "File creation requires filesystem write permission"}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
         <FileSearchField
           ref={searchInputRef}
           name="project-files-search"
@@ -587,6 +627,23 @@ export default function FileBrowserPanel({
         >
           {error ?? pathSearch.error} Click to retry.
         </button>
+      ) : null}
+      {createDirectory !== null ? (
+        <CreateFileDialog
+          environmentId={environmentId}
+          cwd={cwd}
+          directory={createDirectory}
+          canCreate={canCreate}
+          onClose={() => setCreateDirectory(null)}
+          onCreated={(relativePath) => {
+            handleSearchValueChange("");
+            refresh();
+            void loadFileAncestors(relativePath, (directory) => load(directory, true), {
+              signal: new AbortController().signal,
+            });
+            onOpenFile(relativePath);
+          }}
+        />
       ) : null}
       {query.trim() && pathSearch.truncated && !pathSearch.isPending ? (
         <div className="px-3 py-1 text-xs text-muted-foreground">
