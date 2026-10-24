@@ -59,7 +59,7 @@ function optimisticProjectFileKey(target: OptimisticProjectFileTarget): string {
 }
 
 function writtenFilePaths(
-  input: EnvironmentRpcInput<typeof WS_METHODS.projectsWriteFile>,
+  input: Pick<EnvironmentRpcInput<typeof WS_METHODS.projectsWriteFile>, "cwd" | "relativePath">,
   result: EnvironmentRpcSuccess<typeof WS_METHODS.projectsWriteFile>,
 ) {
   return new Set(
@@ -222,6 +222,41 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectsCreateFromThread,
       scheduler: projectScheduler,
       concurrency: { mode: "serial", key: ({ environmentId }) => environmentId },
+    }),
+    createFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:create-file",
+      tag: WS_METHODS.projectsCreateFile,
+      scheduler: fileScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.cwd, input.relativePath]),
+      },
+      execute: (input) =>
+        requestGuarded(WS_METHODS.projectsCreateFile, input).pipe(
+          Effect.tap((result) =>
+            Effect.forEach(writtenFilePaths(input, result), fileMetadata.invalidate),
+          ),
+        ),
+      onSuccess: ({ environmentId, input }, registry, result) =>
+        Effect.sync(() => {
+          for (const path of writtenFilePaths(input, result))
+            fileMetadata.refreshPath(environmentId, path, registry);
+          for (const relativePath of new Set([input.relativePath, result.relativePath])) {
+            for (const allowMissing of [undefined, true]) {
+              registry.refresh(
+                readFile({
+                  environmentId,
+                  input: {
+                    cwd: input.cwd,
+                    relativePath,
+                    ...(allowMissing ? { allowMissing } : {}),
+                  },
+                }),
+              );
+            }
+          }
+        }),
     }),
     writeFile: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:projects:write-file",
