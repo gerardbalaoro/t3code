@@ -1627,13 +1627,21 @@ export function createStageWorkspaceConfig(input: {
           cpu: hostCpu,
         };
 
+  const stageOverrides = { ...overrides };
+  // Staged installs have no lockfile. Keep exact-version patches on their intended package.
+  for (const patchKey of Object.keys(patchedDependencies ?? {})) {
+    const [, packageName, version] =
+      patchKey.match(/^(.+)@(\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?(?:\+[\dA-Za-z.-]+)?)$/) ?? [];
+    if (packageName && version) stageOverrides[packageName] = version;
+  }
+
   return {
     supportedArchitectures,
     ...(allowBuilds && Object.keys(allowBuilds).length > 0 ? { allowBuilds } : {}),
     ...(patchedDependencies && Object.keys(patchedDependencies).length > 0
       ? { patchedDependencies }
       : {}),
-    ...(overrides && Object.keys(overrides).length > 0 ? { overrides } : {}),
+    ...(Object.keys(stageOverrides).length > 0 ? { overrides: stageOverrides } : {}),
     packageExtensions: STAGE_PACKAGE_EXTENSIONS,
   };
 }
