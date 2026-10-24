@@ -47,7 +47,7 @@ const PROJECT = {
 
 const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
   const metadataRequests: string[][] = [];
-  const file = { byteLength: 5 };
+  const file = { byteLength: 5, contents: "old" };
   const readResponse = {
     wait: Effect.void as Effect.Effect<void>,
     missing: false,
@@ -71,12 +71,19 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
                       truncated: false,
                       exists: false,
                     }
-                  : { relativePath: "foo", byteLength, contents: "old", truncated: false },
+                  : { relativePath: "foo", byteLength, contents: file.contents, truncated: false },
               );
             }),
           [WS_METHODS.projectsWriteFile]: () =>
             Effect.sync(() => {
               file.byteLength = 10;
+              return { relativePath: "foo" };
+            }),
+          [WS_METHODS.projectsCreateFile]: () =>
+            Effect.sync(() => {
+              file.byteLength = 0;
+              file.contents = "";
+              readResponse.missing = false;
               return { relativePath: "foo" };
             }),
           [WS_METHODS.filesystemGetMetadata]: (input: { paths: string[] }) =>
@@ -145,6 +152,56 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
 });
 
 describe("writeFile metadata", () => {
+  it.effect(
+    "refreshes a cached missing file after creation and preserves other editor drafts",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness();
+        h.readResponse.missing = true;
+        const query = h.commands.readFile({
+          environmentId: ENVIRONMENT_ID,
+          input: { cwd: "/repo", relativePath: "foo", allowMissing: true },
+        });
+        h.registry.mount(query);
+        expect(
+          (yield* AtomRegistry.getResult(h.registry, query, { suspendOnWaiting: true })).exists,
+        ).toBe(false);
+        const draft = h.commands.optimisticFile({
+          environmentId: ENVIRONMENT_ID,
+          cwd: "/repo",
+          relativePath: "other.ts",
+        });
+        h.registry.mount(draft);
+        const unsaved = {
+          confirmedAgainst: undefined,
+          data: {
+            relativePath: "other.ts",
+            contents: "unsaved edits",
+            byteLength: 13,
+            truncated: false,
+          },
+        };
+        h.registry.set(draft, unsaved);
+        expect(
+          yield* Effect.promise(() =>
+            h.commands.createFile.run(h.registry, {
+              environmentId: ENVIRONMENT_ID,
+              input: { cwd: "/repo", relativePath: "foo" },
+            }),
+          ),
+        ).toMatchObject({ _tag: "Success" });
+        expect(
+          yield* AtomRegistry.getResult(h.registry, query, { suspendOnWaiting: true }),
+        ).toEqual({
+          relativePath: "foo",
+          contents: "",
+          byteLength: 0,
+          truncated: false,
+        });
+        expect(h.registry.get(draft)).toBe(unsaved);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("preserves optional read results without seeding metadata for an absent file", () =>
     Effect.gen(function* () {
       const h = yield* makeHarness();

@@ -369,6 +369,141 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
     );
   });
 
+  describe("createFile", () => {
+    it.effect("reports filesystem permission denial without creating a file", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const fs = yield* FileSystem.FileSystem;
+        const cwd = yield* makeTempDir;
+        using _write = vi
+          .spyOn(NodeFSP, "writeFile")
+          .mockRejectedValueOnce(Object.assign(new Error("access denied"), { code: "EACCES" }));
+        expect(
+          yield* service.createFile({ cwd, relativePath: "denied" }).pipe(Effect.flip),
+        ).toMatchObject({ reason: "permission_denied" });
+        expect(yield* fs.readDirectory(cwd)).toEqual([]);
+      }),
+    );
+
+    it.effect("creates an empty file with parents and refreshes cached entries", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const entries = yield* WorkspaceEntries.WorkspaceEntries;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        yield* entries.list({ cwd });
+        expect(yield* service.createFile({ cwd, relativePath: "new/nested/file.ts" })).toEqual({
+          relativePath: "new/nested/file.ts",
+        });
+        expect(yield* fs.readFileString(path.join(cwd, "new/nested/file.ts"))).toBe("");
+        expect((yield* entries.list({ cwd })).entries).toContainEqual(
+          expect.objectContaining({ path: "new/nested/file.ts", kind: "file" }),
+        );
+      }),
+    );
+
+    it.effect("refuses an existing file or directory without changing contents", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "nested/existing.txt", "keep me");
+        for (const relativePath of ["nested/existing.txt", "nested"]) {
+          const error = yield* service.createFile({ cwd, relativePath }).pipe(Effect.flip);
+          expect(error).toMatchObject({ reason: "already_exists" });
+        }
+        expect(yield* fs.readFileString(path.join(cwd, "nested/existing.txt"))).toBe("keep me");
+      }),
+    );
+
+    it.effect("refuses a competing creation after path validation", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        const target = path.join(cwd, "race.txt");
+        const service = yield* WorkspaceFileSystem.make.pipe(
+          Effect.provideService(
+            FileSystem.FileSystem,
+            FileSystem.FileSystem.of({
+              ...fs,
+              makeDirectory: (directory, options) =>
+                fs
+                  .makeDirectory(directory, options)
+                  .pipe(Effect.tap(() => fs.writeFileString(target, "created by someone else"))),
+            }),
+          ),
+          Effect.provide(layerKnownWorkspacesTest),
+        );
+        expect(
+          yield* service.createFile({ cwd, relativePath: "race.txt" }).pipe(Effect.flip),
+        ).toMatchObject({ reason: "already_exists" });
+        expect(yield* fs.readFileString(target)).toBe("created by someone else");
+      }),
+    );
+
+    it.effect("rejects root, absolute, escaping and git metadata paths", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        const outside = yield* makeTempDir;
+        for (const relativePath of [
+          ".",
+          "",
+          "../escape.txt",
+          path.join(outside, "file"),
+          ".git/config",
+        ]) {
+          const error = yield* service.createFile({ cwd, relativePath }).pipe(Effect.flip);
+          expect(["WorkspacePathOutsideRootError", "WorkspaceFilePathEscapeError"]).toContain(
+            error._tag,
+          );
+        }
+        expect(yield* fs.readDirectory(cwd)).toEqual([]);
+        expect(yield* fs.readDirectory(outside)).toEqual([]);
+      }),
+    );
+
+    it.effect("rejects unknown workspaces before creating parents", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const fs = yield* FileSystem.FileSystem;
+        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: UNKNOWN_WORKSPACE_PREFIX });
+        expect(
+          yield* service.createFile({ cwd, relativePath: "new/file" }).pipe(Effect.flip),
+        ).toBeInstanceOf(KnownWorkspaces.UnknownWorkspaceError);
+        expect(yield* fs.readDirectory(cwd)).toEqual([]);
+      }),
+    );
+
+    it.effect.skipIf(!symlinksSupported)(
+      "rejects symlink escapes and existing symlink targets",
+      () =>
+        Effect.gen(function* () {
+          const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir;
+          const outside = yield* makeTempDir;
+          yield* writeTextFile(cwd, "existing", "keep me");
+          yield* fs.symlink(outside, path.join(cwd, "escape"));
+          yield* fs.symlink(path.join(cwd, "existing"), path.join(cwd, "alias"));
+          expect(
+            yield* service.createFile({ cwd, relativePath: "escape/file" }).pipe(Effect.flip),
+          ).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
+          expect(
+            yield* service.createFile({ cwd, relativePath: "alias" }).pipe(Effect.flip),
+          ).toMatchObject({ reason: "already_exists" });
+          expect(yield* fs.readFileString(path.join(cwd, "existing"))).toBe("keep me");
+          expect(yield* fs.readDirectory(outside)).toEqual([]);
+        }),
+    );
+  });
+
   describe("writeFile", () => {
     it.effect("rejects writes outside a known workspace", () =>
       Effect.gen(function* () {

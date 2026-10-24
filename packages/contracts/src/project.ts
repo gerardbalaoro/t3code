@@ -521,6 +521,29 @@ export const ProjectWriteFileResult = Schema.Struct({
 });
 export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type;
 
+export const ProjectCreateFileInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
+});
+export type ProjectCreateFileInput = typeof ProjectCreateFileInput.Type;
+
+export class ProjectCreateFileError extends Schema.TaggedError<ProjectCreateFileError>()(
+  "ProjectCreateFileError",
+  {
+    cwd: TrimmedNonEmptyString,
+    relativePath: TrimmedNonEmptyString,
+    reason: Schema.Literals([
+      "already_exists",
+      "permission_denied",
+      "invalid_path",
+      "unknown_workspace",
+      "operation_failed",
+    ]),
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
 export const ProjectEnsureScratchResult = Schema.Struct({
   projectId: ProjectId,
 });

@@ -332,6 +332,17 @@ File links refer to the environment's machine, including when you connect remote
 Previews use the original file, even outside the workspace. Moving or deleting it
 can break the preview, so save a copy if you need to keep it.
 
+## Create workspace files
+
+On web and desktop, open **Files** and select **New file** to create an empty workspace file.
+To start in a folder, right-click that folder and select **New file**.
+Enter a workspace-relative path, such as `src/example.ts`.
+T3 Code creates missing parent folders and opens the new file in the editor.
+Existing files remain unchanged.
+
+File creation requires filesystem write permission and a server that supports this feature.
+Files outside the workspace remain read-only.
+
 ## Files outside the workspace
 
 Follow an agent's file link to read a report or other file outside the workspace.

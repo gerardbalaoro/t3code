@@ -10,6 +10,7 @@ import type {
   ProjectReadFileResult,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
+  ProjectCreateFileInput,
 } from "@t3tools/contracts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -108,6 +109,27 @@ export const WorkspaceFileSystemError = Schema.Union([
 ]);
 export type WorkspaceFileSystemError = typeof WorkspaceFileSystemError.Type;
 
+export class WorkspaceFileCreationError extends Schema.TaggedError<WorkspaceFileCreationError>()(
+  "WorkspaceFileCreationError",
+  {
+    workspaceRoot: Schema.String,
+    relativePath: Schema.String,
+    reason: Schema.Literals(["already_exists", "permission_denied", "operation_failed"]),
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "already_exists":
+        return `A file or folder already exists at '${this.relativePath}'. Choose another path.`;
+      case "permission_denied":
+        return `Permission denied creating '${this.relativePath}'.`;
+      case "operation_failed":
+        return `Could not create '${this.relativePath}'. Check the path and folder permissions.`;
+    }
+  }
+}
+
 export class WorkspaceFileSystem extends Context.Service<
   WorkspaceFileSystem,
   {
@@ -127,6 +149,15 @@ export class WorkspaceFileSystem extends Context.Service<
     ) => Effect.Effect<
       ProjectWriteFileResult,
       | WorkspaceFileSystemError
+      | WorkspacePaths.WorkspacePathOutsideRootError
+      | KnownWorkspaces.UnknownWorkspaceError
+    >;
+    readonly createFile: (
+      input: ProjectCreateFileInput,
+    ) => Effect.Effect<
+      ProjectWriteFileResult,
+      | WorkspaceFileSystemError
+      | WorkspaceFileCreationError
       | WorkspacePaths.WorkspacePathOutsideRootError
       | KnownWorkspaces.UnknownWorkspaceError
     >;
@@ -458,7 +489,7 @@ export const make = Effect.gen(function* () {
    * rejected rather than written through.
    */
   const resolveWriteTarget = Effect.fn("WorkspaceFileSystem.resolveWriteTarget")(function* (
-    input: ProjectWriteFileInput,
+    input: Pick<ProjectWriteFileInput, "cwd" | "relativePath">,
   ) {
     const target = yield* workspacePaths.resolveRelativePathWithinRoot({
       workspaceRoot: input.cwd,
@@ -582,7 +613,46 @@ export const make = Effect.gen(function* () {
     return { relativePath: target.relativePath };
   });
 
-  return WorkspaceFileSystem.of({ getMetadata, readFile, writeFile });
+  const createFile: WorkspaceFileSystem["Service"]["createFile"] = Effect.fn(
+    "WorkspaceFileSystem.createFile",
+  )(function* (input) {
+    yield* knownWorkspaces.assertContains(input.cwd);
+    const target = yield* resolveWriteTarget(input);
+    yield* fileSystem.makeDirectory(path.dirname(target.realTargetPath), { recursive: true }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new WorkspaceFileCreationError({
+            workspaceRoot: input.cwd,
+            relativePath: input.relativePath,
+            reason:
+              cause.reason._tag === "PermissionDenied" ? "permission_denied" : "operation_failed",
+            cause,
+          }),
+      ),
+    );
+    yield* Effect.tryPromise({
+      // O_EXCL makes the existence check atomic with creation, including a competing writer.
+      try: () => NodeFSP.writeFile(target.realTargetPath, "", { flag: "wx" }),
+      catch: (cause) => {
+        const code = (cause as NodeJS.ErrnoException).code;
+        return new WorkspaceFileCreationError({
+          workspaceRoot: input.cwd,
+          relativePath: input.relativePath,
+          reason:
+            code === "EEXIST"
+              ? "already_exists"
+              : code === "EACCES" || code === "EPERM"
+                ? "permission_denied"
+                : "operation_failed",
+          cause,
+        });
+      },
+    });
+    yield* workspaceEntries.refresh(input.cwd);
+    return { relativePath: target.relativePath };
+  });
+
+  return WorkspaceFileSystem.of({ getMetadata, readFile, writeFile, createFile });
 });
 
 export const layer = Layer.effect(WorkspaceFileSystem, make);

@@ -296,7 +296,7 @@ Older clients may show controls that the server denies. Create a fresh pairing
 link to change a client's permissions.
 
 `filesystem:read` allows browsing host files, opening workspace files, and viewing
-local changes. Add `filesystem:write` to allow editing files or saving plans to
+local changes. Add `filesystem:write` to allow creating and editing files or saving plans to
 the workspace. These scopes control direct file access from the client.
 
 To remove an environment from T3 Connect, open your account menu's **T3 Connect**
