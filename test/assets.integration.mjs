@@ -109,3 +109,20 @@ test("rejects an AppImage blockmap larger than its archive", async (t) => {
   writeFileSync(path, raw);
   await assert.rejects(validateAssets(f), /invalid AppImage blockMapSize/);
 });
+
+test("recovery verifies final artifacts without rewriting manifests, checksums, or provenance", async (t) => {
+  const f = fixture(t);
+  const files = await validateAssets(f);
+  const names = [...files, "asset-list.json"];
+  const before = new Map(names.map((name) => [name, readFileSync(join(f.directory, name))]));
+  await validateAssets({ ...f, verifyOnly: true });
+  for (const [name, bytes] of before)
+    assert.deepEqual(readFileSync(join(f.directory, name)), bytes);
+});
+
+test("recovery rejects corrupted CLI archives as well as installer/feed hashes", async (t) => {
+  const f = fixture(t);
+  await validateAssets(f);
+  writeFileSync(join(f.directory, `t3-${version}-linux-x64.tar.gz`), "corrupted");
+  await assert.rejects(validateAssets({ ...f, verifyOnly: true }), /Recovery checksum mismatch/);
+});

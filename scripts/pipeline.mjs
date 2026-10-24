@@ -9,7 +9,9 @@ import {
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assemble, json } from "./assemble.mjs";
-import { run, git, tryGit, remoteSha, resolve, identity } from "./git.mjs";
+import { run, git, tryGit, remoteSha, resolve, identity, guardedPush } from "./git.mjs";
+import { checkPushAccess, requirePushToken } from "./push-auth.mjs";
+export { guardedPush } from "./git.mjs";
 
 export const FORK = "gerardbalaoro/t3code";
 export const FORK_URL = `https://github.com/${FORK}.git`;
@@ -30,7 +32,9 @@ export function selectRelease(releases, state, requested) {
   if (!state.initialized) return stable.at(-1);
   return stable.find(
     (release) =>
-      !["validated", "published", "baseline"].includes(state.releases[String(release.id)]?.status),
+      !["validated", "published", "baseline", "promotion-pending"].includes(
+        state.releases[String(release.id)]?.status,
+      ),
   );
 }
 export function assertFresh(cwd, repository, automationSha) {
@@ -40,15 +44,6 @@ export function assertFresh(cwd, repository, automationSha) {
 export function assertFastForward(cwd, previous, next) {
   if (previous && tryGit(cwd, ["merge-base", "--is-ancestor", previous, next]) === undefined)
     throw new Error("Fork main diverged from upstream; refusing to overwrite user commits");
-}
-export function guardedPush(cwd, repository, updates) {
-  git(cwd, [
-    "push",
-    "--atomic",
-    ...updates.map(({ ref, expected }) => `--force-with-lease=${ref}:${expected}`),
-    repository,
-    ...updates.map(({ ref, sha }) => `${sha}:${ref}`),
-  ]);
 }
 // Release artifacts use their triggering tag. Only development validation replaces dev.
 export function promotionUpdates(entry, mirrorSha) {
@@ -76,7 +71,7 @@ function emit(name, value) {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
   else console.log(`${name}=${value}`);
 }
-function loadState(cwd) {
+export function loadState(cwd) {
   const sha = remoteSha(cwd, FORK_URL, STATE_REF);
   if (!sha)
     return {
@@ -96,8 +91,13 @@ function loadState(cwd) {
   }
   return { sha, data };
 }
-function saveState(cwd, state) {
-  const index = join(cwd, ".git", "state-index");
+export function saveState(cwd, state) {
+  const index = git(cwd, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-path",
+    "state-index",
+  ]).trim();
   const env = { ...identity, GIT_INDEX_FILE: index };
   try {
     git(cwd, ["read-tree", "--empty"], { env });
@@ -119,7 +119,7 @@ function currentRun() {
   if (!/^\d+$/.test(id || "")) throw new Error("GITHUB_RUN_ID is required");
   return `${id}-${process.env.GITHUB_RUN_ATTEMPT || "1"}`;
 }
-function checkContext(cwd) {
+export function checkContext(cwd) {
   if (process.env.GITHUB_REPOSITORY !== FORK || process.env.GITHUB_REF !== "refs/heads/patch")
     throw new Error("This workflow must run on gerardbalaoro/t3code:patch");
   const sha = git(cwd, ["rev-parse", "HEAD"]).trim();
@@ -153,6 +153,8 @@ export function publicConnect(sourceRoot) {
 }
 async function prepare(cwd) {
   const automationSha = checkContext(cwd);
+  // A real workflow-changing ref probe fails before a reservation or any builds.
+  checkPushAccess(cwd, FORK_URL);
   const state = loadState(cwd);
   const manual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch";
   const releases = fetchReleases();
@@ -246,6 +248,7 @@ async function finish(cwd) {
     throw new Error("Build or validation failed; dev and releases were not changed");
   }
   checkContext(cwd);
+  const token = requirePushToken();
   const source = pathResolve("source");
   if (git(source, ["rev-parse", "HEAD"]).trim() !== entry.sources.assembledSha)
     throw new Error("Source artifact SHA does not match reservation");
@@ -260,15 +263,38 @@ async function finish(cwd) {
   resolve(source, `https://github.com/${UPSTREAM}.git`, entry.sources.upstream.sha);
   rmSync(join(source, ".git", "shallow"), { force: true });
   git(source, ["fsck", "--connectivity-only"]);
-  guardedPush(source, FORK_URL, updates);
+  checkContext(cwd);
+  entry.status = "promotion-pending";
+  entry.validatedArtifactId = process.env.VALIDATED_ARTIFACT_ID || null;
+  if (entry.release) state.data.releases[String(entry.release.id)] = entry;
+  saveState(cwd, state);
+  guardedPush(source, FORK_URL, updates, { token });
   if (entry.publish) {
-    const tag = `v${entry.version}`;
-    const notesPath = join(cwd, ".output", "release-notes.md");
-    mkdirSync(dirname(notesPath), { recursive: true });
-    writeFileSync(
-      notesPath,
-      `Gerard's T3 Code distribution ${entry.version}\n\nUpstream: ${entry.release.url}\nSource: ${entry.sources.upstream.sha}\nAutomation: ${entry.automationSha}\nManifest: ${entry.sources.manifestSha256}\n\nSee provenance.json and SHA256SUMS for exact sources and assets. Optional signing depends on configured fork credentials.\n`,
-    );
+    publishRelease(cwd, entry, entry.automationSha);
+  }
+  entry.status = entry.publish ? "published" : "validated";
+  if (entry.release) state.data.releases[String(entry.release.id)] = entry;
+  saveState(cwd, state);
+  console.log(`${entry.status}: ${entry.version}, source ${entry.sources.assembledSha}`);
+}
+
+export function publishRelease(cwd, entry, currentAutomationSha) {
+  assertFresh(cwd, FORK_URL, currentAutomationSha);
+  const tag = `v${entry.version}`;
+  const notesPath = join(cwd, ".output", "release-notes.md");
+  mkdirSync(dirname(notesPath), { recursive: true });
+  writeFileSync(
+    notesPath,
+    `Gerard's T3 Code distribution ${entry.version}\n\nUpstream: ${entry.release.url}\nSource: ${entry.sources.upstream.sha}\nAutomation: ${entry.automationSha}\nManifest: ${entry.sources.manifestSha256}\n\nSee provenance.json and SHA256SUMS for exact sources and assets. Optional signing depends on configured fork credentials.\n`,
+  );
+  const existing = JSON.parse(
+    gh(["api", `repos/${FORK}/releases?per_page=100`, "--paginate", "--slurp"]),
+  )
+    .flat()
+    .find((release) => release.tag_name === tag);
+  if (existing && !existing.draft)
+    throw new Error(`${tag} is already public; inspect its assets before any recovery`);
+  if (!existing)
     gh([
       "release",
       "create",
@@ -282,23 +308,19 @@ async function finish(cwd) {
       "--notes-file",
       notesPath,
     ]);
-    const assets = JSON.parse(readFileSync("release-assets/asset-list.json"));
-    gh([
-      "release",
-      "upload",
-      tag,
-      ...assets.map((name) => `release-assets/${name}`),
-      "--repo",
-      FORK,
-    ]);
-    // Publication is last: a failed upload leaves only a draft.
-    assertFresh(cwd, FORK_URL, entry.automationSha);
-    gh(["release", "edit", tag, "--repo", FORK, "--draft=false", "--latest"]);
-  }
-  entry.status = entry.publish ? "published" : "validated";
-  if (entry.release) state.data.releases[String(entry.release.id)] = entry;
-  saveState(cwd, state);
-  console.log(`${entry.status}: ${entry.version}, source ${entry.sources.assembledSha}`);
+  const assets = JSON.parse(readFileSync("release-assets/asset-list.json"));
+  gh([
+    "release",
+    "upload",
+    tag,
+    ...assets.map((name) => `release-assets/${name}`),
+    "--clobber",
+    "--repo",
+    FORK,
+  ]);
+  // Publication is last: a failed upload leaves only a draft.
+  assertFresh(cwd, FORK_URL, currentAutomationSha);
+  gh(["release", "edit", tag, "--repo", FORK, "--draft=false", "--latest"]);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(pathResolve(process.argv[1])).href) {

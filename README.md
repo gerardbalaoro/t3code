@@ -22,6 +22,31 @@ The generated commit has one upstream parent. Feature branch histories never bec
 Fixed author identity and source timestamps make identical resolved inputs produce identical source commits.
 Build outputs can still vary with runner images, downloaded toolchains, and optional signing.
 
+## Promotion credential
+
+Git ref promotion requires the repository secret `PATCH_PUSH_TOKEN`.
+Create a new fine-grained personal access token with access to **only** `gerardbalaoro/t3code`.
+Grant repository permissions **Contents: read and write** and **Workflows: read and write**.
+Metadata read access is automatic. No Actions write or administration permission is required for this token.
+Set an expiration and rotate the secret before it expires.
+
+Save the new token through the fork's [Actions secrets settings](https://github.com/gerardbalaoro/t3code/settings/secrets/actions).
+Alternatively, run `gh secret set PATCH_PUSH_TOKEN --repo gerardbalaoro/t3code` and enter it at the private terminal prompt.
+Do not export `gh auth token`, copy an existing CLI OAuth credential, or put a token in chat or committed files.
+
+GitHub's [ref permissions](https://docs.github.com/en/rest/git/refs#create-a-reference) include workflow write access when workflow changes are involved.
+The [workflow permissions syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions) cannot add that permission to `GITHUB_TOKEN`.
+GitHub documents a [separate token for additional permissions](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token#granting-additional-permissions).
+The built-in token still handles state, artifact reads, and release uploads.
+Only the preflight and ref-promotion steps receive `PATCH_PUSH_TOKEN`. Packaging jobs receive only named signing secrets.
+
+Before reserving a version, preflight creates a temporary `patch-permission-probe/*` tag whose commit adds a workflow file.
+It then deletes that tag with an exact lease. It never moves `main`, `dev`, or `patch`.
+The probe workflow has only a manual trigger, and the existing push workflow selects the `patch` branch.
+A missing or insufficient credential stops the run before assembly or packaging.
+A cleanup error names the exact temporary tag and commit for operator inspection.
+A read-only API request or dry-run push does not establish workflow write permission.
+
 ## Run a validation build
 
 Use Node 24 or later and Git for standalone tooling:
@@ -78,7 +103,8 @@ Conflicts require an updated feature selection. Never resolve them by editing ge
 GitHub Actions polls stable upstream releases every six hours and supports manual dispatch.
 No fork release event triggers this workflow. Upstream preview and nightly releases are excluded from this first milestone.
 The first run establishes a historical baseline. The first scheduled poll builds the newest stable release if initialization has not occurred.
-Later polls process uncompleted release IDs in order. Failed or interrupted reservations remain eligible for another attempt.
+Later polls process uncompleted release IDs in order. Failed builds remain eligible for another attempt.
+Validated builds with pending promotion use artifact recovery instead of an automatic rebuild.
 Manual release dispatch can rebuild an already processed upstream release with the current manifest.
 
 Scheduled publication stays disabled until repository variable `PATCH_RELEASES_ENABLED` equals `true`.
@@ -97,6 +123,52 @@ A divergent fork `main` stops promotion. A changed `dev` stops promotion. Neithe
 After all targets pass, the workflow checks required assets and their updater hashes, then promotes the appropriate source refs.
 Publication creates a draft, uploads the complete asset list, and makes the release public only after successful uploads.
 An interrupted upload can leave a draft for operator inspection. It does not become a public partial release.
+
+## Recover a validated release
+
+Use recovery when packaging and validation passed but Git promotion or draft upload failed.
+Recovery does not run the desktop matrix or reserve another version.
+It checks the original run attempt, all six desktop jobs, both Windows verification jobs, and the final asset gate.
+It downloads the original source and validated release by immutable artifact IDs with digest mismatches treated as errors.
+It then rechecks source provenance, updater hashes, every required asset, and `SHA256SUMS` without changing the files.
+The current manifest and distribution patch must match the original selection.
+The current automation commit must descend from the original automation commit.
+
+After configuring `PATCH_PUSH_TOKEN`, recover the validated `1.0.3` reservation with:
+
+```sh
+gh workflow run recover-release.yml --repo gerardbalaoro/t3code --ref patch \
+  -f source_run_id=39982062402 -f source_attempt=1
+```
+
+The read-only inspection command works before credential setup:
+
+```sh
+node scripts/recover.mjs inspect 39982062402 1
+```
+
+Recovery uses the original version and source commit. It publishes only the reserved tag and preserves `main` and `dev`.
+It refuses a tag that points to different source or a release that is already public.
+An existing draft can resume uploads. Publication remains the final step after every upload succeeds.
+The recovery receipt records the original artifact IDs/digests and the new automation run in `patch-state`.
+History and `nextSequence` are preserved.
+
+During a credential outage, stop scheduled work explicitly:
+
+```sh
+gh workflow disable distribute.yml --repo gerardbalaoro/t3code
+```
+
+The recovery workflow remains available for manual dispatch.
+After successful credential preflight and resolution of any separate build failure, re-enable normal distribution:
+
+```sh
+gh workflow enable distribute.yml --repo gerardbalaoro/t3code
+```
+
+A staging error such as `ERR_PNPM_UNUSED_PATCH` is a build failure, not a promotion-permission failure.
+Inspect the selected source and staged dependency resolution before restarting its matrix.
+Never disable patch checks or reuse incomplete artifacts to bypass that failure.
 
 ## Desktop coverage
 

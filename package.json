@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/assembly.test.mjs",
-    "check": "node --check scripts/assemble.mjs && node --check scripts/pipeline.mjs && node --check scripts/assets.mjs"
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check scripts/assemble.mjs && node --check scripts/pipeline.mjs && node --check scripts/assets.mjs && node --check scripts/push-auth.mjs && node --check scripts/recover.mjs"
   },
   "engines": {
     "node": ">=24"

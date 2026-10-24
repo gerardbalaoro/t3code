@@ -49,3 +49,21 @@ export const identity = {
   GIT_COMMITTER_NAME: "Gerard patch automation",
   GIT_COMMITTER_EMAIL: "patch@users.noreply.github.com",
 };
+
+export function guardedPush(cwd, repository, updates, { token } = {}) {
+  const auth = token
+    ? ["-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential"]
+    : [];
+  git(
+    cwd,
+    [
+      ...auth,
+      "push",
+      "--atomic",
+      ...updates.map(({ ref, expected }) => `--force-with-lease=${ref}:${expected}`),
+      repository,
+      ...updates.map(({ ref, sha }) => `${sha}:${ref}`),
+    ],
+    token ? { env: { GH_TOKEN: token, GITHUB_TOKEN: "" } } : {},
+  );
+}

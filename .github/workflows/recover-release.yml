@@ -1,0 +1,73 @@
+name: Recover validated release
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Original run whose complete desktop/native/asset gates passed; no builds run here."
+        required: true
+        type: string
+      source_attempt:
+        description: "Original run attempt."
+        default: "1"
+        required: true
+        type: string
+
+concurrency:
+  group: gerard-patch-distribution
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  recover:
+    if: github.repository == 'gerardbalaoro/t3code' && github.ref == 'refs/heads/patch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Authenticate API and state operations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
+      - name: Check workflow-capable fork credential before downloads
+        env:
+          PATCH_PUSH_TOKEN: ${{ secrets.PATCH_PUSH_TOKEN }}
+        run: node scripts/recover.mjs preflight
+      - name: Inspect original validation gates and immutable artifact IDs
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+        run: node scripts/recover.mjs inspect "$SOURCE_RUN" "$SOURCE_ATTEMPT"
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.plan.outputs.source_artifact_id }}
+          run-id: ${{ inputs.source_run_id }}
+          repository: gerardbalaoro/t3code
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: source-input
+      - name: Restore original source commit
+        run: mkdir source && tar -xf source-input/source.tar -C source
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.plan.outputs.release_artifact_id }}
+          run-id: ${{ inputs.source_run_id }}
+          repository: gerardbalaoro/t3code
+          github-token: ${{ github.token }}
+          digest-mismatch: error
+          path: release-assets
+      - name: Recheck original bytes and publish the reserved tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATCH_PUSH_TOKEN: ${{ secrets.PATCH_PUSH_TOKEN }}
+        run: node scripts/recover.mjs finish

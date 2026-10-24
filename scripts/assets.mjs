@@ -27,7 +27,7 @@ export function requiredAssets(version) {
     "manifest.json",
   ];
 }
-export async function validateAssets({ directory, sourceRoot, version }) {
+export async function validateAssets({ directory, sourceRoot, version, verifyOnly = false }) {
   if (!/^1\.0\.\d+$/.test(version)) throw new Error("Invalid distribution version");
   const { parseUpdateManifest, mergeUpdateManifests, serializeUpdateManifest } = await import(
     pathToFileURL(join(resolve(sourceRoot), "scripts/lib/update-manifest.ts")).href
@@ -51,9 +51,11 @@ export async function validateAssets({ directory, sourceRoot, version }) {
     for (const name of new Set([primary, secondary]))
       if (name !== output) rmSync(join(directory, name));
   };
-  merge("mac", "latest-mac.yml", "latest-mac-x64.yml", "latest-mac.yml");
-  merge("win", "latest-win-x64.yml", "latest-win-arm64.yml", "latest.yml");
-  for (const name of readdirSync(directory)) {
+  if (!verifyOnly) {
+    merge("mac", "latest-mac.yml", "latest-mac-x64.yml", "latest-mac.yml");
+    merge("win", "latest-win-x64.yml", "latest-win-arm64.yml", "latest.yml");
+  }
+  for (const name of verifyOnly ? [] : readdirSync(directory)) {
     if (name === "builder-debug.yml" || name === "builder-effective-config.yaml")
       rmSync(join(directory, name));
   }
@@ -123,20 +125,30 @@ export async function validateAssets({ directory, sourceRoot, version }) {
   const upstreamManifest = readFileSync(join(directory, "manifest.json"));
   if (createHash("sha256").update(upstreamManifest).digest("hex") !== sources.manifestSha256)
     throw new Error("Manifest digest mismatch");
-  provenance.status = "validated";
-  writeFileSync(join(directory, "provenance.json"), json(provenance));
+  if (verifyOnly && provenance.status !== "validated")
+    throw new Error("Recovery requires validated provenance");
+  if (!verifyOnly) {
+    provenance.status = "validated";
+    writeFileSync(join(directory, "provenance.json"), json(provenance));
+  }
   const checksums = files
     .sort()
     .map((name) => `${hash(join(directory, name), "sha256")}  ${name}`)
     .join("\n");
-  writeFileSync(join(directory, "SHA256SUMS"), `${checksums}\n`);
+  if (verifyOnly) {
+    if (readFileSync(join(directory, "SHA256SUMS"), "utf8") !== `${checksums}\n`)
+      throw new Error("Recovery checksum mismatch");
+  } else writeFileSync(join(directory, "SHA256SUMS"), `${checksums}\n`);
   const actual = readdirSync(directory).filter((name) => !["asset-list.json"].includes(name));
   const allowed = [...files, "SHA256SUMS"];
   if (actual.some((name) => !allowed.includes(name)))
     throw new Error(
       `Unexpected assets: ${actual.filter((name) => !allowed.includes(name)).join(", ")}`,
     );
-  writeFileSync(join(directory, "asset-list.json"), json(allowed));
+  if (verifyOnly) {
+    if (readFileSync(join(directory, "asset-list.json"), "utf8") !== json(allowed))
+      throw new Error("Recovery asset list mismatch");
+  } else writeFileSync(join(directory, "asset-list.json"), json(allowed));
   return allowed;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

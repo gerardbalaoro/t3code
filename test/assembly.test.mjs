@@ -234,3 +234,18 @@ test("release tags preserve newer dev, while development promotion uses pinned m
   );
   assert.equal(remoteSha(f.root, remote, "refs/heads/dev"), development.assembledSha);
 });
+
+test("polling leaves validated promotion failures for artifact recovery instead of rebuilding", () => {
+  const releases = [{ id: 2, tag_name: "v0.1.2" }];
+  assert.equal(
+    selectRelease(releases, {
+      initialized: true,
+      releases: { 2: { status: "promotion-pending" } },
+    }),
+    undefined,
+  );
+  assert.equal(
+    selectRelease(releases, { initialized: true, releases: { 2: { status: "failed" } } }).id,
+    2,
+  );
+});
