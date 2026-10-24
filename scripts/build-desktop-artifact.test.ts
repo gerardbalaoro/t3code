@@ -29,6 +29,7 @@ import {
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
   createBuildConfig,
+  createStageWorkspaceConfig,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -1855,3 +1856,33 @@ it.effect.skipIf(!symlinksSupported)("preserves relative links when replacing di
     assert.equal(yield* fs.readFileString(path.join(output, app, "Current")), "rebuilt-app");
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
+
+it("pins staged patched dependencies when a lockfile-free install would resolve a newer version", () => {
+  const config = createStageWorkspaceConfig({
+    platform: "linux",
+    arch: "x64",
+    patchedDependencies: {
+      "node-pty@1.2.0-beta.15": "patches/node-pty.patch",
+      "@ff-labs/fff-node@0.11.0": "patches/fff.patch",
+    },
+    overrides: { "dbus-next>usocket": "-", "node-pty": "1.2.0-beta.16" },
+  });
+  assert.deepStrictEqual(config.overrides, {
+    "dbus-next>usocket": "-",
+    "node-pty": "1.2.0-beta.15",
+    "@ff-labs/fff-node": "0.11.0",
+  });
+});
+
+it("leaves unversioned and range patches and unrelated overrides unchanged", () => {
+  const config = createStageWorkspaceConfig({
+    platform: "win",
+    arch: "arm64",
+    patchedDependencies: {
+      "node-pty": "patches/node-pty.patch",
+      "@example/runtime@^2.0.0": "patches/runtime.patch",
+    },
+    overrides: { "@ff-labs/fff-node": "0.11.0" },
+  });
+  assert.deepStrictEqual(config.overrides, { "@ff-labs/fff-node": "0.11.0" });
+});
