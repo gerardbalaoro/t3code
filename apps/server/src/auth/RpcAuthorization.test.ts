@@ -2,6 +2,7 @@ import {
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
+  AuthFilesystemWriteScope,
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   DEFAULT_SERVER_SETTINGS,
@@ -192,6 +193,53 @@ it.effect.each([WS_METHODS.subscribeVcsBranch, WS_METHODS.subscribeVcsStatus] as
       );
       expect(handled).toBe(1);
     }).pipe(Effect.scoped),
+);
+
+it.effect("authorizes file creation only with filesystem write permission", () =>
+  Effect.gen(function* () {
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (
+          tag,
+        ): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof WS_METHODS.projectsCreateFile> =>
+          tag !== WS_METHODS.projectsCreateFile,
+      ),
+    );
+    for (const allowed of [false, true]) {
+      let handled = 0;
+      const client = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            group.toLayerHandler(WS_METHODS.projectsCreateFile, () =>
+              Effect.sync(() => {
+                handled++;
+                return { relativePath: "new.txt" };
+              }),
+            ),
+            RpcAuthorization.layer(
+              allowed ? [AuthFilesystemWriteScope] : [AuthFilesystemReadScope],
+            ),
+          ),
+        ),
+      );
+      const result = yield* client[WS_METHODS.projectsCreateFile]({
+        cwd: "/workspace",
+        relativePath: "new.txt",
+      }).pipe(Effect.result);
+      if (allowed) {
+        expect(result).toMatchObject({ _tag: "Success", success: { relativePath: "new.txt" } });
+      } else {
+        expect(result).toMatchObject({
+          _tag: "Failure",
+          failure: {
+            _tag: "EnvironmentAuthorizationError",
+            requiredPermission: AuthFilesystemWriteScope,
+          },
+        });
+      }
+      expect(handled).toBe(allowed ? 1 : 0);
+    }
+  }).pipe(Effect.scoped),
 );
 
 describe("settings mutation authorization", () => {
