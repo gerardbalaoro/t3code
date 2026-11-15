@@ -293,6 +293,9 @@ export function RightPanelSurfaceContent(props: {
             revealLine={surface.kind === "file" ? (surface.revealLine ?? null) : null}
             revealRequestId={surface.kind === "file" ? surface.revealRequestId : 0}
             onOpenFile={files.onOpenFile}
+            onClearSelection={() =>
+              useRightPanelStore.getState().navigateFolder(threadRef, surface.id, "", "")
+            }
             onNavigateFolder={(relativePath, folderTrail, keepSource) =>
               useRightPanelStore
                 .getState()

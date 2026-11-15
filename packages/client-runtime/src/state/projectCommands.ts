@@ -1,5 +1,6 @@
 import { msg } from "gt-i18n";
 import { type MarkedText, markedTextEnglish } from "../errors/translatable.ts";
+import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import {
   type EnvironmentId,
   ProjectId,
@@ -15,12 +16,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Atom, AtomRegistry } from "effect/reactivity";
 
-import {
-  type EnvironmentRpcInput,
-  type EnvironmentRpcSuccess,
-  request,
-  requestGuarded,
-} from "../rpc/client.ts";
+import { type EnvironmentRpcInput, request, requestGuarded } from "../rpc/client.ts";
 import type { EnvironmentProject } from "./models.ts";
 import {
   createAtomCommandScheduler,
@@ -61,8 +57,8 @@ function optimisticProjectFileKey(target: OptimisticProjectFileTarget): string {
 }
 
 function writtenFilePaths(
-  input: EnvironmentRpcInput<typeof WS_METHODS.projectsWriteFile>,
-  result: EnvironmentRpcSuccess<typeof WS_METHODS.projectsWriteFile>,
+  input: { readonly cwd: string; readonly relativePath: string },
+  result: { readonly relativePath: string },
 ) {
   return new Set(
     [result.relativePath, input.relativePath].map((path) =>
@@ -100,7 +96,7 @@ export function createProjectEnvironmentAtoms<R, E>(
       Atom.withLabel(`environment-data:projects:optimistic-file:${key}`),
     ),
   );
-  const readFile = createEnvironmentRpcQueryAtomFamily(runtime, {
+  const readFileFamily = createEnvironmentRpcQueryAtomFamily(runtime, {
     label: "environment-data:projects:read-file",
     tag: WS_METHODS.projectsReadFile,
     staleTimeMs: 30_000,
@@ -125,6 +121,37 @@ export function createProjectEnvironmentAtoms<R, E>(
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { projectId: string } }) =>
       JSON.stringify([environmentId, input.projectId]),
+  };
+  const readTargets = new Map<string, Parameters<typeof readFileFamily>[0]>();
+  const readFile = (target: Parameters<typeof readFileFamily>[0]) => {
+    readTargets.set(JSON.stringify(target), target);
+    if (readTargets.size > 1024) readTargets.delete(readTargets.keys().next().value!);
+    return readFileFamily(target);
+  };
+  const mutationPaths = (
+    environmentId: EnvironmentId,
+    cwd: string,
+    roots: ReadonlyArray<string>,
+  ) => {
+    const relativePaths = new Set(roots);
+    for (const target of readTargets.values()) {
+      if (
+        target.environmentId === environmentId &&
+        target.input.cwd === cwd &&
+        roots.some(
+          (root) =>
+            target.input.relativePath === root || target.input.relativePath.startsWith(`${root}/`),
+        )
+      )
+        relativePaths.add(target.input.relativePath);
+    }
+    return {
+      relativePaths,
+      paths: fileMetadata.affectedPaths(
+        environmentId,
+        [...relativePaths].map((relativePath) => resolveWorkspaceFilePath(relativePath, cwd)),
+      ),
+    };
   };
   return {
     fileMetadata: fileMetadata.metadata,
@@ -228,6 +255,131 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectsCreateFromThread,
       scheduler: projectScheduler,
       concurrency: { mode: "serial", key: ({ environmentId }) => environmentId },
+    }),
+    renameEntry: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:renameEntry",
+      tag: WS_METHODS.projectsRenameEntry,
+      scheduler: fileScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.cwd]),
+      },
+      execute: Effect.fn("projects.mutateEntry")(function* (input) {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        return yield* requestGuarded(WS_METHODS.projectsRenameEntry, input).pipe(
+          Effect.tap((result) =>
+            Effect.forEach(
+              mutationPaths(supervisor.target.environmentId, input.cwd, [
+                input.relativePath,
+                input.newRelativePath,
+                result.relativePath,
+              ]).paths,
+              fileMetadata.invalidate,
+            ),
+          ),
+        );
+      }),
+      onSuccess: ({ environmentId, input }, registry, result) =>
+        Effect.sync(() => {
+          const affected = mutationPaths(environmentId, input.cwd, [
+            input.relativePath,
+            input.newRelativePath,
+            result.relativePath,
+          ]);
+          for (const path of affected.paths)
+            fileMetadata.refreshPath(environmentId, path, registry);
+          for (const relativePath of affected.relativePaths)
+            for (const allowMissing of [undefined, true])
+              registry.refresh(
+                readFile({
+                  environmentId,
+                  input: {
+                    cwd: input.cwd,
+                    relativePath,
+                    ...(allowMissing ? { allowMissing } : {}),
+                  },
+                }),
+              );
+        }),
+    }),
+    deleteEntry: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:deleteEntry",
+      tag: WS_METHODS.projectsDeleteEntry,
+      scheduler: fileScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.cwd]),
+      },
+      execute: Effect.fn("projects.mutateEntry")(function* (input) {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        return yield* requestGuarded(WS_METHODS.projectsDeleteEntry, input).pipe(
+          Effect.tap((result) =>
+            Effect.forEach(
+              mutationPaths(supervisor.target.environmentId, input.cwd, [
+                input.relativePath,
+                result.relativePath,
+              ]).paths,
+              fileMetadata.invalidate,
+            ),
+          ),
+        );
+      }),
+      onSuccess: ({ environmentId, input }, registry, result) =>
+        Effect.sync(() => {
+          const affected = mutationPaths(environmentId, input.cwd, [
+            input.relativePath,
+            result.relativePath,
+          ]);
+          for (const path of affected.paths)
+            fileMetadata.refreshPath(environmentId, path, registry);
+          for (const relativePath of affected.relativePaths)
+            for (const allowMissing of [undefined, true])
+              registry.refresh(
+                readFile({
+                  environmentId,
+                  input: {
+                    cwd: input.cwd,
+                    relativePath,
+                    ...(allowMissing ? { allowMissing } : {}),
+                  },
+                }),
+              );
+        }),
+    }),
+    createFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:create-file",
+      tag: WS_METHODS.projectsCreateFile,
+      scheduler: fileScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.cwd, input.relativePath]),
+      },
+      execute: (input) =>
+        requestGuarded(WS_METHODS.projectsCreateFile, input).pipe(
+          Effect.tap((result) =>
+            Effect.forEach(writtenFilePaths(input, result), fileMetadata.invalidate),
+          ),
+        ),
+      onSuccess: ({ environmentId, input }, registry, result) =>
+        Effect.sync(() => {
+          for (const path of writtenFilePaths(input, result))
+            fileMetadata.refreshPath(environmentId, path, registry);
+          for (const relativePath of new Set([input.relativePath, result.relativePath])) {
+            for (const allowMissing of [undefined, true]) {
+              registry.refresh(
+                readFile({
+                  environmentId,
+                  input: {
+                    cwd: input.cwd,
+                    relativePath,
+                    ...(allowMissing ? { allowMissing } : {}),
+                  },
+                }),
+              );
+            }
+          }
+        }),
     }),
     writeFile: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:projects:write-file",
