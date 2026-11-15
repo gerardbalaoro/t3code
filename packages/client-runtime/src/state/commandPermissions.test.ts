@@ -10,6 +10,7 @@ import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
+  AuthFilesystemWriteScope,
   AuthOrchestrationOperateScope,
   AuthTerminalOperateScope,
   AuthOrchestrationReadScope,
@@ -70,6 +71,39 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect.each([
+    WS_METHODS.projectsCreateFile,
+    WS_METHODS.projectsRenameEntry,
+    WS_METHODS.projectsDeleteEntry,
+  ] as const)("requires the destination filesystem write grant for %s", (method) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const create = createCommandPermissions(runtime, method);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(create.permissionAtom(env))).toBe(false);
+        expect((yield* create.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthFilesystemWriteScope],
+            permissions: [AuthFilesystemWriteScope],
+          }),
+        );
+        expect(registry.get(create.permissionAtom(env))).toBe(true);
+        yield* create.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(create.permissionAtom(other))).toBe(false);
+        expect((yield* create.authorize(registry, other).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+      }),
+    ),
+  );
+
   it.effect("requires the destination read grant to refresh providers", () =>
     Effect.gen(function* () {
       const registry = yield* setup;

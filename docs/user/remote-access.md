@@ -96,6 +96,8 @@ Manage pairing links and active client sessions in **Settings → Sharing & acce
 
 Switch off **Settings → Environments → Local environment** in the desktop app to run with no local server, WSL backend, or incoming connections while continuing to drive remote hosts (if a local background service uses the same T3 home, **Open in** still works locally).
 
+Use `filesystem:write` to allow creating, editing, renaming, or deleting workspace files and folders.
+
 ## Troubleshooting
 
 See [T3 Connect troubleshooting](./t3-connect-troubleshooting.md) for step-by-step connection diagnostics, and [Outside agents](./outside-agents.md) for MCP connections.
