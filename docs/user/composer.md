@@ -173,6 +173,19 @@ Select an image or video attachment or link to preview it.
 
 File links point to the file on the environment's machine, so moving or deleting the original breaks the preview—save a copy if you need to keep it.
 
+## Create, rename, and delete workspace files
+
+On web and desktop, open **Files** and select **New file** to create an empty workspace file.
+To start in a folder, right-click that folder and select **New file**.
+Enter a workspace-relative path, such as `src/example.ts`.
+T3 Code creates missing parent folders and opens the new file in the editor.
+Existing files remain unchanged.
+
+File creation requires filesystem write permission and a server that supports this feature.
+Files outside the workspace remain read-only.
+
+Right-click a file or folder in **Files** to rename or permanently delete it. Rename accepts a workspace-relative path and creates missing destination folders. It never replaces an existing entry. Deleting a folder also deletes its contents. Save pending edits before changing the open file or its folder. These actions require filesystem write permission and a server that supports them.
+
 ## Files outside the workspace
 
 Following an agent's file link to a file outside the workspace opens it read-only. External HTML files cannot load neighboring scripts, styles, or images.
