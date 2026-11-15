@@ -167,6 +167,9 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
 };
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+// This fork publishes one release track, so it has nothing to switch to.
+const SHOWS_UPDATE_TRACK = false;
+
 function AboutVersionSection() {
   const setting = useSearchableSetting();
   const gt = useGT();
@@ -352,7 +355,7 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {hasDesktopBridge && SHOWS_UPDATE_TRACK ? (
         <SettingsRow
           {...setting("update-track")}
           description={
