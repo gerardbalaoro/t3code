@@ -708,6 +708,152 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
     );
   });
 
+  describe("entry mutations", () => {
+    it.effect(
+      "renames files, creates destination parents, allows case changes and refreshes entries",
+      () =>
+        Effect.gen(function* () {
+          const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+          const entries = yield* WorkspaceEntries.WorkspaceEntries;
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir;
+          yield* writeTextFile(cwd, "file.txt", "keep");
+          yield* entries.list({ cwd });
+          for (const [relativePath, newRelativePath] of [
+            ["file.txt", "other.txt"],
+            ["other.txt", "new/nested/file.txt"],
+            ["new/nested/file.txt", "new/nested/FILE.txt"],
+          ]) {
+            expect(
+              yield* service.renameEntry({
+                cwd,
+                relativePath: relativePath!,
+                newRelativePath: newRelativePath!,
+              }),
+            ).toEqual({ relativePath: newRelativePath });
+          }
+          expect(yield* fs.readFileString(path.join(cwd, "new/nested/FILE.txt"))).toBe("keep");
+          expect((yield* entries.list({ cwd })).entries).toContainEqual(
+            expect.objectContaining({ path: "new/nested/FILE.txt" }),
+          );
+          yield* service.deleteEntry({ cwd, relativePath: "new/nested/FILE.txt" });
+          yield* writeTextFile(cwd, "new/child/file", "delete");
+          yield* service.deleteEntry({ cwd, relativePath: "new" });
+          expect(yield* fs.readDirectory(cwd)).toEqual([]);
+          expect((yield* entries.list({ cwd })).entries).toEqual([]);
+        }),
+    );
+
+    it.effect("reports permission errors for rename and delete", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "file", "keep");
+        const denied = Object.assign(new Error("access denied"), { code: "EACCES" });
+        using _rename = vi.spyOn(NodeFSP, "rename").mockRejectedValueOnce(denied);
+        expect(
+          yield* service
+            .renameEntry({ cwd, relativePath: "file", newRelativePath: "new" })
+            .pipe(Effect.flip),
+        ).toMatchObject({ reason: "permission_denied" });
+        using _remove = vi.spyOn(NodeFSP, "rm").mockRejectedValueOnce(denied);
+        expect(
+          yield* service.deleteEntry({ cwd, relativePath: "file" }).pipe(Effect.flip),
+        ).toMatchObject({ reason: "permission_denied" });
+      }),
+    );
+
+    it.effect(
+      "refuses overwrites, self moves, roots, metadata, missing entries and unknown workspaces",
+      () =>
+        Effect.gen(function* () {
+          const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir;
+          yield* writeTextFile(cwd, "folder/file", "keep");
+          yield* writeTextFile(cwd, "existing", "existing");
+          expect(
+            yield* service
+              .renameEntry({ cwd, relativePath: "folder/file", newRelativePath: "existing" })
+              .pipe(Effect.flip),
+          ).toMatchObject({ reason: "already_exists" });
+          expect(
+            yield* service
+              .renameEntry({ cwd, relativePath: "folder", newRelativePath: "folder/new/child" })
+              .pipe(Effect.flip),
+          ).toMatchObject({ reason: "invalid_path" });
+          for (const relativePath of [".", "", "../escape", ".git", ".git/config"]) {
+            expect(
+              yield* service.deleteEntry({ cwd, relativePath }).pipe(Effect.flip),
+            ).toBeDefined();
+            expect(
+              yield* service
+                .renameEntry({ cwd, relativePath, newRelativePath: "renamed" })
+                .pipe(Effect.flip),
+            ).toBeDefined();
+            expect(
+              yield* service
+                .renameEntry({ cwd, relativePath: "folder", newRelativePath: relativePath })
+                .pipe(Effect.flip),
+            ).toBeDefined();
+          }
+          for (const operation of [
+            service.deleteEntry({ cwd, relativePath: "missing" }),
+            service.renameEntry({ cwd, relativePath: "missing", newRelativePath: "new" }),
+          ])
+            expect(yield* operation.pipe(Effect.flip)).toMatchObject({ reason: "not_found" });
+          const unknown = yield* fs.makeTempDirectoryScoped({ prefix: UNKNOWN_WORKSPACE_PREFIX });
+          expect(
+            yield* service.deleteEntry({ cwd: unknown, relativePath: "file" }).pipe(Effect.flip),
+          ).toBeInstanceOf(KnownWorkspaces.UnknownWorkspaceError);
+          expect(
+            yield* service
+              .renameEntry({ cwd: unknown, relativePath: "file", newRelativePath: "new/file" })
+              .pipe(Effect.flip),
+          ).toBeInstanceOf(KnownWorkspaces.UnknownWorkspaceError);
+          expect(yield* fs.readFileString(path.join(cwd, "existing"))).toBe("existing");
+          expect(yield* fs.readFileString(path.join(cwd, "folder/file"))).toBe("keep");
+        }),
+    );
+
+    it.effect.skipIf(!symlinksSupported)(
+      "changes symlinks themselves and refuses symlinked parent escapes",
+      () =>
+        Effect.gen(function* () {
+          const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir;
+          const outside = yield* makeTempDir;
+          yield* writeTextFile(outside, "file", "keep");
+          yield* fs.symlink(outside, path.join(cwd, "link"));
+          for (const operation of [
+            service.deleteEntry({ cwd, relativePath: "link/file" }),
+            service.renameEntry({ cwd, relativePath: "link/file", newRelativePath: "file" }),
+          ])
+            expect(yield* operation.pipe(Effect.flip)).toBeInstanceOf(
+              WorkspaceFileSystem.WorkspaceFilePathEscapeError,
+            );
+          yield* writeTextFile(cwd, "local", "local");
+          expect(
+            yield* service
+              .renameEntry({ cwd, relativePath: "local", newRelativePath: "link/new/file" })
+              .pipe(Effect.flip),
+          ).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
+          yield* service.renameEntry({ cwd, relativePath: "link", newRelativePath: "renamed" });
+          expect(yield* Effect.promise(() => NodeFSP.readlink(path.join(cwd, "renamed")))).toBe(
+            outside,
+          );
+          yield* service.deleteEntry({ cwd, relativePath: "renamed" });
+          yield* fs.symlink(path.join(outside, "missing"), path.join(cwd, "dangling"));
+          yield* service.deleteEntry({ cwd, relativePath: "dangling" });
+          expect(yield* fs.readFileString(path.join(outside, "file"))).toBe("keep");
+        }),
+    );
+  });
+
   describe("writeFile", () => {
     it.effect("rejects writes outside a known workspace", () =>
       Effect.gen(function* () {
