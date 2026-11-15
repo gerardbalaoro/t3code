@@ -257,6 +257,9 @@ import {
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileError,
+  ProjectRenameEntryInput,
+  ProjectDeleteEntryInput,
+  ProjectEntryMutationError,
   ProjectCreateFileInput,
   ProjectCreateFileError,
   ProjectWriteFileInput,
@@ -423,6 +426,8 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectsRenameEntry: "projects.renameEntry",
+  projectsDeleteEntry: "projects.deleteEntry",
   projectsCreateFile: "projects.createFile",
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
@@ -1411,6 +1416,17 @@ const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectsRenameEntryRpc = Rpc.make(WS_METHODS.projectsRenameEntry, {
+  payload: ProjectRenameEntryInput,
+  success: ProjectWriteFileResult,
+  error: Schema.Union([ProjectEntryMutationError, EnvironmentAuthorizationError]),
+});
+const WsProjectsDeleteEntryRpc = Rpc.make(WS_METHODS.projectsDeleteEntry, {
+  payload: ProjectDeleteEntryInput,
+  success: ProjectWriteFileResult,
+  error: Schema.Union([ProjectEntryMutationError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsCreateFileRpc = Rpc.make(WS_METHODS.projectsCreateFile, {
   payload: ProjectCreateFileInput,
   success: ProjectWriteFileResult,
@@ -2250,6 +2266,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
+  WsProjectsRenameEntryRpc,
+  WsProjectsDeleteEntryRpc,
   WsProjectsCreateFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,

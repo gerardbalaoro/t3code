@@ -84,6 +84,16 @@ const makeHarness = Effect.fn("TestProjectCommands.makeHarness")(function* () {
               file.byteLength = 10;
               return { relativePath: "foo" };
             }),
+          [WS_METHODS.projectsRenameEntry]: () =>
+            Effect.sync(() => {
+              readResponse.missing = true;
+              return { relativePath: "renamed" };
+            }),
+          [WS_METHODS.projectsDeleteEntry]: () =>
+            Effect.sync(() => {
+              readResponse.missing = true;
+              return { relativePath: "foo" };
+            }),
           [WS_METHODS.projectsCreateFile]: () =>
             Effect.sync(() => {
               file.byteLength = 0;
@@ -304,6 +314,54 @@ describe("writeFile metadata", () => {
           byteLength: 0,
           truncated: false,
         });
+        expect(h.registry.get(draft)).toBe(unsaved);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect.each(["renameEntry", "deleteEntry"] as const)(
+    "%s refreshes descendant reads and metadata while preserving unrelated drafts",
+    (operation) =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness();
+        const query = h.commands.readFile({
+          environmentId: ENVIRONMENT_ID,
+          input: { cwd: "/repo", relativePath: "foo/child", allowMissing: true },
+        });
+        const metadata = h.commands.fileMetadata({
+          environmentId: ENVIRONMENT_ID,
+          input: { path: "/repo/foo/child" },
+        });
+        h.registry.mount(query);
+        h.registry.mount(metadata);
+        yield* AtomRegistry.getResult(h.registry, query, { suspendOnWaiting: true });
+        expect(
+          yield* AtomRegistry.getResult(h.registry, metadata, { suspendOnWaiting: true }),
+        ).not.toBeNull();
+        const draft = h.commands.optimisticFile({
+          environmentId: ENVIRONMENT_ID,
+          cwd: "/repo",
+          relativePath: "other",
+        });
+        h.registry.mount(draft);
+        const unsaved = {
+          saved: false as const,
+          data: { relativePath: "other", contents: "unsaved", byteLength: 7, truncated: false },
+        };
+        h.registry.set(draft, unsaved);
+        expect(
+          yield* Effect.promise(() =>
+            h.commands[operation].run(h.registry, {
+              environmentId: ENVIRONMENT_ID,
+              input: { cwd: "/repo", relativePath: "foo", newRelativePath: "renamed" },
+            }),
+          ),
+        ).toMatchObject({ _tag: "Success" });
+        expect(
+          (yield* AtomRegistry.getResult(h.registry, query, { suspendOnWaiting: true })).exists,
+        ).toBe(false);
+        expect(
+          yield* AtomRegistry.getResult(h.registry, metadata, { suspendOnWaiting: true }),
+        ).toBeNull();
         expect(h.registry.get(draft)).toBe(unsaved);
       }).pipe(Effect.scoped),
   );

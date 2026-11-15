@@ -20,6 +20,8 @@ import { WS_METHODS } from "./rpc.ts";
 export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   [WS_METHODS.projectsCreateFile]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectsRenameEntry]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectsDeleteEntry]: AuthFilesystemWriteScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,
