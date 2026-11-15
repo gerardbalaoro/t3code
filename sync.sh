@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rebuilds `dev` as upstream main plus every branch in branches.txt, then
-# updates the fork's `main` and `dev`. Run it from a clone of the fork whose
+# Rebuilds `dev` as upstream's latest nightly plus every branch in branches.txt,
+# then updates the fork's `main` (upstream main) and `dev`. Run it from a clone of the fork whose
 # `origin` is the fork.
 #
 #   DRY_RUN=1     build `dev` locally and report, but push nothing
@@ -31,7 +31,14 @@ git fetch --quiet --no-tags origin "+refs/heads/dev:refs/sync/fork-dev" 2>/dev/n
 git merge-base --is-ancestor refs/sync/fork-main refs/sync/upstream ||
   fail "The fork's main has commits upstream does not. Reset it to upstream main by hand."
 
-git checkout --quiet --force --detach refs/sync/upstream
+nightly_tag="$(git ls-remote --tags --refs "$upstream_url" 'v*-nightly.*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)"
+[[ -n "$nightly_tag" ]] || fail "Upstream has no nightly tags."
+git fetch --quiet --no-tags "$upstream_url" "+refs/tags/$nightly_tag:refs/sync/nightly"
+git merge-base --is-ancestor refs/sync/nightly refs/sync/upstream ||
+  fail "Upstream's $nightly_tag is not on upstream main."
+echo "based on upstream $nightly_tag"
+
+git checkout --quiet --force --detach "refs/sync/nightly^{commit}"
 
 while read -r first second _; do
   [[ -z "$first" || "$first" == \#* ]] && continue
@@ -43,6 +50,7 @@ while read -r first second _; do
 
   git fetch --quiet --no-tags "$source_url" "+refs/heads/$branch:refs/sync/feature" ||
     fail "Could not fetch $label."
+  # Feature branches start from upstream main, which is ahead of the nightly.
   base="$(git merge-base refs/sync/feature refs/sync/upstream)" ||
     fail "$label shares no history with upstream main."
 
@@ -52,7 +60,7 @@ while read -r first second _; do
   if ! git rebase --quiet --onto HEAD "$base" sync-scratch >/dev/null 2>&1; then
     conflicts="$(git diff --name-only --diff-filter=U | sed 's/^/  /')"
     git rebase --abort
-    fail "$(printf '%s conflicts with upstream main in:\n%s\nRebase %s onto main and push it, or remove it from branches.txt.' "$label" "$conflicts" "$label")"
+    fail "$(printf '%s conflicts with upstream %s in:\n%s\nRebase %s onto main and push it, or remove it from branches.txt.' "$label" "$nightly_tag" "$conflicts" "$label")"
   fi
   git checkout --quiet --detach sync-scratch
   echo "applied $label"
@@ -68,6 +76,7 @@ if [[ -n "$old_dev" && "$(git rev-parse "$old_dev^{tree}")" == "$(git rev-parse 
 fi
 
 output upstream "$(git rev-parse refs/sync/upstream)"
+output upstream_nightly "$nightly_tag"
 output dev "$new_dev"
 output dev_changed "$([[ "$new_dev" != "$old_dev" ]] && echo true || echo false)"
 

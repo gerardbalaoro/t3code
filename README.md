@@ -25,13 +25,15 @@ These branches are applied to upstream main, in this order. `branches.txt` sets 
 
 ## Build Process
 
-1. **Sync** runs every hour. It also runs when `branches.txt` or `sync.sh` changes, or when you start it by hand.
-2. Sync copies upstream main to `main`. It then rebuilds `dev` by replaying each listed branch on top. It never changes the feature branches.
-3. Sync starts **Nightly** if `dev` changed and the last nightly is at least 6 hours old.
-4. Nightly builds `dev` with upstream's own packaging workflow, then publishes it as the latest release, such as `v0.1.10-nightly.20261115.2`.
+1. **Sync** runs every 15 minutes. It also runs when `branches.txt` or `sync.sh` changes, or when you start it by hand.
+2. Sync copies upstream main to `main`. It then rebuilds `dev` by replaying each listed branch on top of upstream's latest nightly. It never changes the feature branches.
+3. Sync starts **Nightly** when upstream has published a nightly that the last build was not based on.
+4. Nightly builds `dev` with upstream's own packaging workflow, then publishes it as the latest release. Its title names the upstream nightly, such as `T3 Code Nightly 0.1.10-nightly.20261115.3 (upstream v0.1.10-nightly.20261115.4723)`.
 5. Installed apps and `t3 update` find the new release.
 
-To build a nightly now, run Sync by hand and check **nightly**.
+To see which upstream nightly you're running, find your version (**Settings → About**) in this fork's releases.
+
+A change to a feature branch ships with the next upstream nightly. To ship it sooner, run Sync by hand and check **nightly**.
 
 ## Patch Changes
 
@@ -41,7 +43,7 @@ To use a branch from another fork, write its clone URL and branch name on one li
 
 ## Blocked Sync
 
-If a branch no longer applies to upstream main, sync stops. It leaves `dev` and the last nightly unchanged. The failed run's summary names the branch and the conflicting files.
+If a branch no longer applies to upstream's latest nightly, sync stops. It leaves `dev` and the last nightly unchanged. The failed run's summary names the branch and the conflicting files.
 
 To fix it, rebase that branch onto `main` and push it. The next sync continues. You can also remove the branch from `branches.txt`.
 

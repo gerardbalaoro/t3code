@@ -1,17 +1,17 @@
 name: Sync
 
-# Keeps `main` equal to upstream, rebuilds `dev` from branches.txt, and starts
-# a nightly when `dev` has changed since the last one.
+# Keeps `main` equal to upstream, rebuilds `dev` on upstream's latest nightly
+# from branches.txt, and starts a nightly when upstream has published a new one.
 on:
   schedule:
-    - cron: "23 * * * *"
+    - cron: "8,23,38,53 * * * *"
   push:
     branches: [patch]
     paths: [branches.txt, sync.sh]
   workflow_dispatch:
     inputs:
       nightly:
-        description: "Start a nightly even if the last one is under 6 hours old"
+        description: "Start a nightly even if upstream has not published a new one"
         type: boolean
         default: false
 
@@ -93,23 +93,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEV: ${{ steps.sync.outputs.dev }}
+          UPSTREAM_NIGHTLY: ${{ steps.sync.outputs.upstream_nightly }}
           FORCE: ${{ inputs.nightly == true }}
         run: |
           if [[ -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly.yml --json status --jq '.[] | select(.status != "completed") | .status')" ]]; then
             echo "A nightly is already running."
             exit 0
           fi
+          # Nightly names each release "... (upstream <tag>)".
           last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
-            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\."))][0] // empty | "\(.target_commitish) \(.published_at)"')"
-          read -r last_ref last_at <<<"$last"
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\."))][0] // empty | "\(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
+          read -r last_ref last_upstream <<<"$last"
           if [[ "$last_ref" == "$DEV" ]]; then
             echo "The latest nightly already has this dev."
             exit 0
           fi
-          # Upstream also waits 6 hours between nightlies.
-          if [[ "$FORCE" != "true" && -n "$last_at" ]] &&
-            (( $(date +%s) - $(date -d "$last_at" +%s) < 6 * 3600 )); then
-            echo "The last nightly is under 6 hours old."
+          if [[ "$FORCE" != "true" && "$last_upstream" == "$UPSTREAM_NIGHTLY" ]]; then
+            echo "The latest nightly is already on upstream $UPSTREAM_NIGHTLY. Branch changes ship with the next one."
             exit 0
           fi
           gh workflow run nightly.yml --repo "$GITHUB_REPOSITORY" --ref patch -f ref="$DEV"

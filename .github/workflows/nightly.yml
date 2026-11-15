@@ -1,6 +1,6 @@
 name: Nightly
 
-# Builds and publishes one `dev` commit as a nightly prerelease. Sync starts
+# Builds and publishes one `dev` commit as a nightly release. Sync starts
 # it; it can also be run by hand with a `dev` commit.
 #
 # Packaging is upstream's own release-desktop.yml, called from `dev`, so its
@@ -311,11 +311,23 @@ jobs:
       # electron-updater reads one manifest per platform covering both architectures.
       - run: node scripts/merge-release-update-manifests.ts release-assets
 
+      # dev is upstream's latest nightly plus the branches, so the fork point
+      # with upstream main is the nightly's commit.
       - name: Write release notes
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
         run: |
           upstream="$(git merge-base "$REF" origin/main)"
+          upstream_tag="$(git ls-remote --tags https://github.com/pingdotgg/t3code.git 'v*-nightly.*' |
+            awk -v sha="$upstream" '$1 == sha { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' | sort -V | tail -n 1)"
+          if [[ -n "$upstream_tag" ]]; then
+            echo "NAME=T3 Code Nightly $VERSION (upstream $upstream_tag)" >> "$GITHUB_ENV"
+            based="upstream [$upstream_tag](https://github.com/pingdotgg/t3code/releases/tag/$upstream_tag)"
+          else
+            based="upstream [\`${upstream:0:10}\`](https://github.com/pingdotgg/t3code/commit/$upstream), which is not an upstream nightly"
+          fi
           {
-            echo "Upstream [\`${upstream:0:10}\`](https://github.com/pingdotgg/t3code/commit/$upstream), plus:"
+            echo "Based on $based, plus:"
             echo
             git log --reverse --format='- %s' "$upstream..$REF"
           } > notes.md
