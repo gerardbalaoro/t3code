@@ -13,6 +13,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
 import { T, useGT, useMessages } from "gt-react";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import { useAtomValue } from "@effect/atom-react";
 import { type Ref, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -48,6 +49,10 @@ import { useDirectoryEntries } from "./useDirectoryEntries";
 import { useProjectPathSearch } from "~/state/queries";
 import { isMacPlatform } from "~/lib/utils";
 import { type PreviewAction, subscribePreviewAction } from "../preview/previewActionBus";
+import { projectEnvironment } from "~/state/projects";
+import { serverEnvironment } from "~/state/server";
+import { EntryMutationDialog } from "./EntryMutationDialog";
+import { CreateFileDialog } from "./CreateFileDialog";
 
 interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
@@ -56,6 +61,8 @@ interface FileBrowserPanelProps {
   selectedPath: string | null;
   selectedPathRevealId: number;
   onOpenFile: (relativePath: string) => void;
+  onClearSelection?: (() => void) | undefined;
+  selectedFilePending?: boolean;
   /** Host-folder entries use absolute paths. Avoid full traversal: disable expand-all and search only
    * loaded folders. */
   hostFolder?: boolean;
@@ -162,6 +169,8 @@ export default function FileBrowserPanel({
   selectedPath,
   selectedPathRevealId,
   onOpenFile,
+  onClearSelection,
+  selectedFilePending,
   onRefreshSelectedFile,
   workspaceMutationId,
   hostFolder = false,
@@ -174,6 +183,19 @@ export default function FileBrowserPanel({
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
   const fileContextMenu = useFileContextMenu(environmentId);
+  const canWrite = useAtomValue(projectEnvironment.createFile.permissionAtom(environmentId));
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const canCreate = !hostFolder && canWrite && serverConfig?.workspaceFileCreation === true;
+  const canRename = useAtomValue(projectEnvironment.renameEntry.permissionAtom(environmentId));
+  const canDelete = useAtomValue(projectEnvironment.deleteEntry.permissionAtom(environmentId));
+  const canMutate =
+    !hostFolder && canRename && canDelete && serverConfig?.workspaceEntryMutations === true;
+  const [mutation, setMutation] = useState<{
+    path: string;
+    operation: "rename" | "delete";
+    folder: boolean;
+  } | null>(null);
+  const [createDirectory, setCreateDirectory] = useState<string | null>(null);
   const {
     entries: directoryEntries,
     load,
@@ -227,6 +249,15 @@ export default function FileBrowserPanel({
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
           [
+            ...(canCreate && entryKinds.get(relativePath) === "directory"
+              ? [{ id: "new-file", label: gt("New file…") }]
+              : []),
+            ...(canMutate
+              ? [
+                  { id: "rename-entry", label: gt("Rename…") },
+                  { id: "delete-entry", label: gt("Delete…") },
+                ]
+              : []),
             ...fileMenuItems,
             { id: "copy-mention", label: gt("Copy mention") },
             { id: "add-to-chat", label: gt("Add to chat") },
@@ -234,6 +265,18 @@ export default function FileBrowserPanel({
           position,
         );
         if (clicked === null) return;
+        if (clicked === "new-file") {
+          setCreateDirectory(relativePath);
+          return;
+        }
+        if (clicked === "rename-entry" || clicked === "delete-entry") {
+          setMutation({
+            path: relativePath,
+            operation: clicked === "rename-entry" ? "rename" : "delete",
+            folder: entryKinds.get(relativePath) === "directory",
+          });
+          return;
+        }
         // Open-with submenu ids are absent from the top-level item list.
         const isFileMenuAction =
           fileMenuItems.some((entry) => entry.id === clicked) || clicked.startsWith("editor:");
@@ -620,6 +663,49 @@ export default function FileBrowserPanel({
         >
           {gt("{error} Click to retry.", { error: error ?? pathSearch.error })}
         </button>
+      ) : null}
+      {mutation ? (
+        <EntryMutationDialog
+          environmentId={environmentId}
+          cwd={cwd}
+          relativePath={mutation.path}
+          operation={mutation.operation}
+          folder={mutation.folder}
+          canMutate={canMutate}
+          hasPendingEdits={Boolean(
+            selectedFilePending &&
+            selectedPath &&
+            (selectedPath === mutation.path || selectedPath.startsWith(`${mutation.path}/`)),
+          )}
+          onClose={() => setMutation(null)}
+          onCompleted={(newPath) => {
+            refresh();
+            if (
+              selectedPath &&
+              (selectedPath === mutation.path || selectedPath.startsWith(`${mutation.path}/`))
+            ) {
+              if (mutation.operation === "delete") onClearSelection?.();
+              else onOpenFile(newPath + selectedPath.slice(mutation.path.length));
+            }
+          }}
+        />
+      ) : null}
+      {createDirectory !== null ? (
+        <CreateFileDialog
+          environmentId={environmentId}
+          cwd={cwd}
+          directory={createDirectory}
+          canCreate={canCreate}
+          onClose={() => setCreateDirectory(null)}
+          onCreated={(relativePath) => {
+            handleSearchValueChange("");
+            refresh();
+            void loadFileAncestors(relativePath, (directory) => load(directory, true), {
+              signal: new AbortController().signal,
+            });
+            onOpenFile(relativePath);
+          }}
+        />
       ) : null}
       {query.trim() && pathSearch.truncated && !pathSearch.isPending ? (
         <div className="px-3 py-1 text-xs text-muted-foreground">
