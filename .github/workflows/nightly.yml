@@ -153,7 +153,8 @@ jobs:
       clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ needs.preflight.outputs.relay_url }}
       label: macOS x64
-      runner: macos-26
+      # Native Intel: under Rosetta, packaging's compile-cache step outlasts its timeout.
+      runner: macos-15-intel
       platform: mac
       target: dmg
       arch: x64
