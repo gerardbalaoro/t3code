@@ -2,6 +2,7 @@ import {
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
+  AuthFilesystemWriteScope,
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
@@ -254,6 +255,78 @@ it.effect.each([WS_METHODS.subscribeVcsBranch, WS_METHODS.subscribeVcsStatus] as
       );
       expect(handled).toBe(1);
     }),
+);
+
+it.effect.each([
+  WS_METHODS.projectsCreateFile,
+  WS_METHODS.projectsRenameEntry,
+  WS_METHODS.projectsDeleteEntry,
+] as const)("authorizes %s only with filesystem write permission", (method) =>
+  Effect.gen(function* () {
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (
+          tag,
+        ): tag is Exclude<
+          keyof typeof RPC_REQUIRED_SCOPES,
+          | typeof WS_METHODS.projectsCreateFile
+          | typeof WS_METHODS.projectsRenameEntry
+          | typeof WS_METHODS.projectsDeleteEntry
+        > =>
+          tag !== WS_METHODS.projectsCreateFile &&
+          tag !== WS_METHODS.projectsRenameEntry &&
+          tag !== WS_METHODS.projectsDeleteEntry,
+      ),
+    );
+    for (const allowed of [false, true]) {
+      let handled = 0;
+      const client = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            group.toLayerHandler(WS_METHODS.projectsCreateFile, () =>
+              Effect.sync(() => {
+                handled++;
+                return { relativePath: "new.txt" };
+              }),
+            ),
+            group.toLayerHandler(WS_METHODS.projectsRenameEntry, () =>
+              Effect.sync(() => {
+                handled++;
+                return { relativePath: "new.txt" };
+              }),
+            ),
+            group.toLayerHandler(WS_METHODS.projectsDeleteEntry, () =>
+              Effect.sync(() => {
+                handled++;
+                return { relativePath: "new.txt" };
+              }),
+            ),
+            RpcAuthorization.layer(
+              allowed ? [AuthFilesystemWriteScope] : [AuthFilesystemReadScope],
+            ),
+          ),
+        ),
+      );
+      const input = { cwd: "/workspace", relativePath: "new.txt", newRelativePath: "renamed.txt" };
+      const result = yield* method === WS_METHODS.projectsCreateFile
+        ? client[method](input).pipe(Effect.result)
+        : method === WS_METHODS.projectsRenameEntry
+          ? client[method](input).pipe(Effect.result)
+          : client[method](input).pipe(Effect.result);
+      if (allowed) {
+        expect(result).toMatchObject({ _tag: "Success", success: { relativePath: "new.txt" } });
+      } else {
+        expect(result).toMatchObject({
+          _tag: "Failure",
+          failure: {
+            _tag: "EnvironmentAuthorizationError",
+            requiredPermission: AuthFilesystemWriteScope,
+          },
+        });
+      }
+      expect(handled).toBe(allowed ? 1 : 0);
+    }
+  }).pipe(Effect.scoped),
 );
 
 describe("settings mutation authorization", () => {

@@ -79,6 +79,8 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProjectEntryMutationError,
+  ProjectCreateFileError,
   ProjectMutationError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
@@ -1901,6 +1903,8 @@ export const layerWsRpc = (
           shellThreadFamilies: true,
           threadLinkMetadata: true,
           shellOlderSettled: true,
+          workspaceFileCreation: true,
+          workspaceEntryMutations: true,
           threadResumeCompletionMarker: true,
           threadSnapshotPagination: true,
           threadFind: true,
@@ -3016,6 +3020,66 @@ export const layerWsRpc = (
                 new ProjectReadFileError({
                   ...input,
                   ...projectFileFailureContext(cause),
+                  cause,
+                }),
+            ),
+          ),
+        [WS_METHODS.projectsRenameEntry]: (input) =>
+          workspaceFileSystem.renameEntry(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ProjectEntryMutationError({
+                  ...input,
+                  reason:
+                    cause._tag === "WorkspaceEntryMutationError"
+                      ? cause.reason
+                      : cause._tag === "UnknownWorkspaceError"
+                        ? "unknown_workspace"
+                        : cause._tag === "WorkspacePathOutsideRootError" ||
+                            cause._tag === "WorkspaceFilePathEscapeError"
+                          ? "invalid_path"
+                          : "operation_failed",
+                  message: cause.message,
+                  cause,
+                }),
+            ),
+          ),
+        [WS_METHODS.projectsDeleteEntry]: (input) =>
+          workspaceFileSystem.deleteEntry(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ProjectEntryMutationError({
+                  ...input,
+                  reason:
+                    cause._tag === "WorkspaceEntryMutationError"
+                      ? cause.reason
+                      : cause._tag === "UnknownWorkspaceError"
+                        ? "unknown_workspace"
+                        : cause._tag === "WorkspacePathOutsideRootError" ||
+                            cause._tag === "WorkspaceFilePathEscapeError"
+                          ? "invalid_path"
+                          : "operation_failed",
+                  message: cause.message,
+                  cause,
+                }),
+            ),
+          ),
+        [WS_METHODS.projectsCreateFile]: (input) =>
+          workspaceFileSystem.createFile(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ProjectCreateFileError({
+                  ...input,
+                  reason:
+                    cause._tag === "WorkspaceFileCreationError"
+                      ? cause.reason
+                      : cause._tag === "UnknownWorkspaceError"
+                        ? "unknown_workspace"
+                        : cause._tag === "WorkspacePathOutsideRootError" ||
+                            cause._tag === "WorkspaceFilePathEscapeError"
+                          ? "invalid_path"
+                          : "operation_failed",
+                  message: cause.message,
                   cause,
                 }),
             ),
