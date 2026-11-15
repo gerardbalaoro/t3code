@@ -1,62 +1,74 @@
-# Gerard's T3 Code builds
+# Gerard's T3 Code Builds
 
-This branch holds the build setup for this fork. It has no app code.
+This branch builds nightly releases of T3 Code with my changes applied on top of upstream.
+It holds the build setup, not app code. The app code is on `dev`.
+
+`patch` is the default branch because GitHub runs scheduled workflows only from the default branch.
+
+## Applied Patches
+
+These branches are applied to upstream main, in this order. `branches.txt` sets the order.
+
+| Branch | Change |
+| --- | --- |
+| `feature/self-update` | Points `t3 update`, the install scripts, SSH host installs, and the startup recovery link at this fork's releases. Without it, a fork build updates itself to upstream's build. |
+| `feature/create-files` | Adds a **New file** action to the workspace files panel. |
 
 ## Branches
 
-| Branch      | What it is                                                         |
-| ----------- | ------------------------------------------------------------------ |
-| `main`      | An exact copy of upstream `pingdotgg/t3code` main. Never commit to it. |
-| `feature/*` | One change each, made on top of `main`.                            |
-| `dev`       | Upstream main plus every branch in `branches.txt`. Rebuilt from scratch on every sync, so never commit to it. |
-| `patch`     | This branch: the branch list, the sync script and the workflows.  |
+| Branch | Purpose |
+| --- | --- |
+| `main` | An exact copy of upstream `pingdotgg/t3code` main. Do not commit to it. |
+| `feature/*` | One change each, based on `main`. |
+| `dev` | Upstream main plus every branch in `branches.txt`. Sync rebuilds it from scratch, so do not commit to it. |
+| `patch` | This branch: the branch list, the sync script, and the workflows. |
 
-## How a build happens
+## Build Process
 
-1. **Sync** runs every hour, when `branches.txt` or `sync.sh` changes here, or by hand.
-   It copies upstream main to `main`, then rebuilds `dev` by replaying each listed branch, in order, on top of it.
-   Feature branches themselves are never changed.
-2. If `dev` changed and the last nightly is at least 6 hours old, sync starts **Nightly**.
-3. Nightly builds `dev` for macOS, Linux and Windows using upstream's own packaging workflow from `dev`,
-   then publishes a prerelease named like `v0.1.9-nightly.20261115.3` with the installers and `t3` CLI downloads.
-   Installed apps and `t3 update` pick it up.
+1. **Sync** runs every hour. It also runs when `branches.txt` or `sync.sh` changes, or when you start it by hand.
+2. Sync copies upstream main to `main`. It then rebuilds `dev` by replaying each listed branch on top. It never changes the feature branches.
+3. Sync starts **Nightly** if `dev` changed and the last nightly is at least 6 hours old.
+4. Nightly builds `dev` with upstream's own packaging workflow, then publishes a prerelease, such as `v0.1.10-nightly.20261115.2`.
+5. Installed apps and `t3 update` find the new release.
 
-To start a nightly now, run Sync by hand with **nightly** checked.
+To build a nightly now, run Sync by hand and check **nightly**.
 
-## Add or remove a change
+## Patch Changes
 
-Edit `branches.txt`. Order matters: later branches apply on top of earlier ones.
-A branch from another fork goes on one line as its clone URL and branch name.
+To add or remove a patch, edit `branches.txt`. Later branches apply on top of earlier ones.
 
-## When sync is blocked
+To use a branch from another fork, write its clone URL and branch name on one line.
 
-If a branch no longer applies to upstream main, sync stops, leaves `dev` and the last nightly alone,
-and the failed run's summary names the branch and files. Rebase that branch onto `main`, push it, and the next sync continues.
-Or remove it from `branches.txt`.
+## Blocked Sync
 
-To check locally without pushing anything, from a clone of this fork:
+If a branch no longer applies to upstream main, sync stops. It leaves `dev` and the last nightly unchanged. The failed run's summary names the branch and the conflicting files.
+
+To fix it, rebase that branch onto `main` and push it. The next sync continues. You can also remove the branch from `branches.txt`.
+
+To test a sync without pushing, run this from a clone of this fork:
 
 ```sh
 DRY_RUN=1 /path/to/patch/sync.sh
 ```
 
-## Install on a server or WSL
+## Installation
 
-The desktop app includes `t3` (Settings → About → t3 command) and installs it into WSL itself.
-On a headless machine:
+Install the desktop app from the latest nightly release. The app includes the `t3` command (**Settings → About → t3 command**). It also installs its own server into WSL.
+
+On a headless machine, run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/scripts/install.sh | T3CODE_CHANNEL=nightly sh
 ```
 
-Do not use the `t3` npm package. It is upstream's and updates to upstream's builds.
+Do not use the `t3` npm package. It is upstream's build and updates to upstream's releases.
+
+The builds are unsigned. Your OS shows a warning on first launch. On macOS, automatic updates need signing.
 
 ## Credentials
 
-Pushing `main`, `dev` and release tags needs a GitHub App, because the default
-Actions token cannot push commits that change workflow files. The app is installed
-only on this fork with Contents and Workflows write access. Its ID is the
-`RELEASE_APP_ID` variable and its key the `RELEASE_APP_PRIVATE_KEY` secret.
-To stop all automation, uninstall the app or disable the Sync workflow.
+A GitHub App pushes `main`, `dev`, and release tags. The default Actions token cannot push commits that change workflow files, and upstream's commits do.
 
-Builds are unsigned. macOS will warn on first launch, and macOS auto-update needs signing.
+The app is installed only on this fork, with Contents and Workflows write access. Its ID is the `RELEASE_APP_ID` variable. Its key is the `RELEASE_APP_PRIVATE_KEY` secret.
+
+To stop all automation, uninstall the app or disable the Sync workflow.
