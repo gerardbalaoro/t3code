@@ -47,6 +47,10 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           token: ${{ steps.app.outputs.token }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
 
       - id: sync
         working-directory: work
@@ -69,6 +73,21 @@ jobs:
             echo
             echo "The previous dev and nightly are unchanged."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Pushing upstream's commits registers upstream's workflows here. They
+      # need upstream's runners and secrets, so they can only queue or fail.
+      - name: Keep upstream's workflows off in this fork
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow list --repo "$GITHUB_REPOSITORY" --json path,state --jq '.[] | select(.state == "active") | .path' |
+            while read -r path; do
+              case "$path" in
+                .github/workflows/sync.yml | .github/workflows/nightly.yml | .github/workflows/release-desktop.yml) ;;
+                *) gh workflow disable "${path##*/}" --repo "$GITHUB_REPOSITORY" && echo "Disabled $path" ;;
+              esac
+            done
 
       - name: Start a nightly if due
         env:
