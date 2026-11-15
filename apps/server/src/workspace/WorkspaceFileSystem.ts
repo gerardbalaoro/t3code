@@ -10,6 +10,8 @@ import type {
   ProjectReadFileResult,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
+  ProjectRenameEntryInput,
+  ProjectDeleteEntryInput,
   ProjectCreateFileInput,
 } from "@t3tools/contracts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
@@ -132,6 +134,22 @@ export class WorkspaceFileCreationError extends Schema.TaggedError<WorkspaceFile
   }
 }
 
+export class WorkspaceEntryMutationError extends Schema.TaggedError<WorkspaceEntryMutationError>()(
+  "WorkspaceEntryMutationError",
+  {
+    relativePath: Schema.String,
+    reason: Schema.Literals([
+      "not_found",
+      "already_exists",
+      "permission_denied",
+      "invalid_path",
+      "operation_failed",
+    ]),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
 export class WorkspaceFileSystem extends Context.Service<
   WorkspaceFileSystem,
   {
@@ -151,6 +169,24 @@ export class WorkspaceFileSystem extends Context.Service<
     ) => Effect.Effect<
       ProjectWriteFileResult,
       | WorkspaceFileSystemError
+      | WorkspacePaths.WorkspacePathOutsideRootError
+      | KnownWorkspaces.UnknownWorkspaceError
+    >;
+    readonly deleteEntry: (
+      input: ProjectDeleteEntryInput,
+    ) => Effect.Effect<
+      ProjectWriteFileResult,
+      | WorkspaceFileSystemError
+      | WorkspaceEntryMutationError
+      | WorkspacePaths.WorkspacePathOutsideRootError
+      | KnownWorkspaces.UnknownWorkspaceError
+    >;
+    readonly renameEntry: (
+      input: ProjectRenameEntryInput,
+    ) => Effect.Effect<
+      ProjectWriteFileResult,
+      | WorkspaceFileSystemError
+      | WorkspaceEntryMutationError
       | WorkspacePaths.WorkspacePathOutsideRootError
       | KnownWorkspaces.UnknownWorkspaceError
     >;
@@ -702,7 +738,125 @@ export const make = Effect.gen(function* () {
     return { relativePath: target.relativePath };
   });
 
-  return WorkspaceFileSystem.of({ getMetadata, readFile, writeFile, createFile });
+  const entryIO = <A>(relativePath: string, operation: () => Promise<A>) =>
+    Effect.tryPromise({
+      try: operation,
+      catch: (cause) => {
+        const code = (cause as NodeJS.ErrnoException).code;
+        const reason =
+          code === "EINVAL"
+            ? "invalid_path"
+            : code === "ENOENT"
+              ? "not_found"
+              : code === "EEXIST"
+                ? "already_exists"
+                : code === "EACCES" || code === "EPERM"
+                  ? "permission_denied"
+                  : "operation_failed";
+        return new WorkspaceEntryMutationError({
+          relativePath,
+          reason,
+          cause,
+          message:
+            reason === "invalid_path"
+              ? "A folder cannot be moved into itself."
+              : reason === "not_found"
+                ? `No file or folder exists at '${relativePath}'.`
+                : reason === "already_exists"
+                  ? `A file or folder already exists at '${relativePath}'. Choose another path.`
+                  : reason === "permission_denied"
+                    ? `Permission denied changing '${relativePath}'.`
+                    : `Could not change '${relativePath}'. Check the path and folder permissions.`,
+        });
+      },
+    });
+
+  const resolveEntry = Effect.fn("WorkspaceFileSystem.resolveEntry")(function* (
+    input: ProjectDeleteEntryInput,
+  ) {
+    const named = yield* workspacePaths.resolveRelativePathWithinRoot({
+      workspaceRoot: input.cwd,
+      relativePath: input.relativePath,
+    });
+    const parent = path.dirname(named.absolutePath);
+    // Resolve only the parent: the final component may be a symlink to any target.
+    const realParent =
+      parent === path.resolve(input.cwd)
+        ? yield* entryIO(input.relativePath, () => NodeFSP.realpath(parent))
+        : (yield* resolveWriteTarget({
+            cwd: input.cwd,
+            relativePath: path.relative(input.cwd, parent),
+          })).realTargetPath;
+    const realTargetPath = path.join(realParent, path.basename(named.absolutePath));
+    if (
+      yield* entryIO(
+        input.relativePath,
+        async () =>
+          (await isInGitFolder(realTargetPath)) || (await isInGitFolder(named.absolutePath)),
+      )
+    ) {
+      return yield* new WorkspaceEntryMutationError({
+        relativePath: input.relativePath,
+        reason: "invalid_path",
+        message: "Git metadata cannot be renamed or deleted.",
+      });
+    }
+    return { relativePath: named.relativePath, realTargetPath };
+  });
+
+  const renameEntry: WorkspaceFileSystem["Service"]["renameEntry"] = Effect.fn(
+    "WorkspaceFileSystem.renameEntry",
+  )(function* (input) {
+    yield* knownWorkspaces.assertContains(input.cwd);
+    const source = yield* resolveEntry(input);
+    const destination = yield* resolveEntry({ ...input, relativePath: input.newRelativePath });
+    yield* entryIO(input.relativePath, async () => {
+      const stat = await NodeFSP.lstat(source.realTargetPath);
+      const relative = path.relative(source.realTargetPath, destination.realTargetPath);
+      if (
+        stat.isDirectory() &&
+        relative !== "" &&
+        !relative.startsWith(`..${path.sep}`) &&
+        relative !== ".." &&
+        !path.isAbsolute(relative)
+      ) {
+        throw Object.assign(new Error("A folder cannot be moved into itself."), { code: "EINVAL" });
+      }
+      const existing = await NodeFSP.lstat(destination.realTargetPath).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        },
+      );
+      if (existing && (existing.ino !== stat.ino || existing.dev !== stat.dev))
+        throw Object.assign(new Error("Destination exists"), { code: "EEXIST" });
+      await NodeFSP.mkdir(path.dirname(destination.realTargetPath), { recursive: true });
+      await NodeFSP.rename(source.realTargetPath, destination.realTargetPath);
+    });
+    yield* workspaceEntries.refresh(input.cwd);
+    return { relativePath: destination.relativePath };
+  });
+
+  const deleteEntry: WorkspaceFileSystem["Service"]["deleteEntry"] = Effect.fn(
+    "WorkspaceFileSystem.deleteEntry",
+  )(function* (input) {
+    yield* knownWorkspaces.assertContains(input.cwd);
+    const target = yield* resolveEntry(input);
+    yield* entryIO(input.relativePath, () =>
+      NodeFSP.rm(target.realTargetPath, { recursive: true }),
+    );
+    yield* workspaceEntries.refresh(input.cwd);
+    return { relativePath: target.relativePath };
+  });
+
+  return WorkspaceFileSystem.of({
+    getMetadata,
+    readFile,
+    writeFile,
+    createFile,
+    renameEntry,
+    deleteEntry,
+  });
 });
 
 export const layer = Layer.effect(WorkspaceFileSystem, make);
