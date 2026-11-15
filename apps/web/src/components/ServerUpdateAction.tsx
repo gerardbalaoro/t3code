@@ -67,6 +67,8 @@ function readUpdatesDenial(environmentId: EnvironmentId): string | undefined {
   );
 }
 
+const CROSS_TRACK_NOTE = "Runs another release track";
+
 /** Hosts refuse a Stable/Nightly crossing outside a track switch, which checks the database first. */
 function refusedCrossing(
   target: {
@@ -85,11 +87,7 @@ function refusedCrossing(
 }
 
 function CrossTrackNote() {
-  return (
-    <span className="text-muted-foreground text-xs">
-      <T>Switch tracks in About → Update track</T>
-    </span>
-  );
+  return <span className="text-muted-foreground text-xs">{CROSS_TRACK_NOTE}</span>;
 }
 
 function updateFailureMessage(error: unknown): string {
