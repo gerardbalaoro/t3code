@@ -548,6 +548,32 @@ export class ProjectCreateFileError extends Schema.TaggedError<ProjectCreateFile
   },
 ) {}
 
+export const ProjectRenameEntryInput = Schema.Struct({
+  ...ProjectCreateFileInput.fields,
+  newRelativePath: ProjectCreateFileInput.fields.relativePath,
+});
+export type ProjectRenameEntryInput = typeof ProjectRenameEntryInput.Type;
+export const ProjectDeleteEntryInput = ProjectCreateFileInput;
+export type ProjectDeleteEntryInput = typeof ProjectDeleteEntryInput.Type;
+
+export class ProjectEntryMutationError extends Schema.TaggedError<ProjectEntryMutationError>()(
+  "ProjectEntryMutationError",
+  {
+    cwd: Schema.String,
+    relativePath: Schema.String,
+    reason: Schema.Literals([
+      "not_found",
+      "already_exists",
+      "permission_denied",
+      "invalid_path",
+      "unknown_workspace",
+      "operation_failed",
+    ]),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
 export const ProjectEnsureScratchResult = Schema.Struct({
   projectId: ProjectId,
 });

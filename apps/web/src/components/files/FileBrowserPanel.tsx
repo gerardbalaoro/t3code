@@ -44,6 +44,7 @@ import { isMacPlatform } from "~/lib/utils";
 import { type PreviewAction, subscribePreviewAction } from "../preview/previewActionBus";
 import { projectEnvironment } from "~/state/projects";
 import { serverEnvironment } from "~/state/server";
+import { EntryMutationDialog } from "./EntryMutationDialog";
 import { CreateFileDialog } from "./CreateFileDialog";
 
 interface FileBrowserPanelProps {
@@ -53,6 +54,8 @@ interface FileBrowserPanelProps {
   selectedPath: string | null;
   selectedPathRevealId: number;
   onOpenFile: (relativePath: string) => void;
+  onClearSelection?: (() => void) | undefined;
+  selectedFilePending?: boolean;
   /** Host-folder entries use absolute paths. Avoid full traversal: disable expand-all and search only
    * loaded folders. */
   hostFolder?: boolean;
@@ -157,6 +160,8 @@ export default function FileBrowserPanel({
   selectedPath,
   selectedPathRevealId,
   onOpenFile,
+  onClearSelection,
+  selectedFilePending,
   onRefreshSelectedFile,
   workspaceMutationId,
   hostFolder = false,
@@ -170,6 +175,15 @@ export default function FileBrowserPanel({
   const canWrite = useAtomValue(projectEnvironment.createFile.permissionAtom(environmentId));
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const canCreate = !hostFolder && canWrite && serverConfig?.workspaceFileCreation === true;
+  const canRename = useAtomValue(projectEnvironment.renameEntry.permissionAtom(environmentId));
+  const canDelete = useAtomValue(projectEnvironment.deleteEntry.permissionAtom(environmentId));
+  const canMutate =
+    !hostFolder && canRename && canDelete && serverConfig?.workspaceEntryMutations === true;
+  const [mutation, setMutation] = useState<{
+    path: string;
+    operation: "rename" | "delete";
+    folder: boolean;
+  } | null>(null);
   const [createDirectory, setCreateDirectory] = useState<string | null>(null);
   const {
     entries: directoryEntries,
@@ -222,6 +236,12 @@ export default function FileBrowserPanel({
             ...(canCreate && entryKinds.get(relativePath) === "directory"
               ? [{ id: "new-file", label: "New file…" }]
               : []),
+            ...(canMutate
+              ? [
+                  { id: "rename-entry", label: "Rename…" },
+                  { id: "delete-entry", label: "Delete…" },
+                ]
+              : []),
             ...fileMenuItems,
             { id: "copy-mention", label: "Copy mention" },
             { id: "add-to-chat", label: "Add to chat" },
@@ -231,6 +251,14 @@ export default function FileBrowserPanel({
         if (clicked === null) return;
         if (clicked === "new-file") {
           setCreateDirectory(relativePath);
+          return;
+        }
+        if (clicked === "rename-entry" || clicked === "delete-entry") {
+          setMutation({
+            path: relativePath,
+            operation: clicked === "rename-entry" ? "rename" : "delete",
+            folder: entryKinds.get(relativePath) === "directory",
+          });
           return;
         }
         // Open-with submenu ids are absent from the top-level item list.
@@ -627,6 +655,32 @@ export default function FileBrowserPanel({
         >
           {error ?? pathSearch.error} Click to retry.
         </button>
+      ) : null}
+      {mutation ? (
+        <EntryMutationDialog
+          environmentId={environmentId}
+          cwd={cwd}
+          relativePath={mutation.path}
+          operation={mutation.operation}
+          folder={mutation.folder}
+          canMutate={canMutate}
+          hasPendingEdits={Boolean(
+            selectedFilePending &&
+            selectedPath &&
+            (selectedPath === mutation.path || selectedPath.startsWith(`${mutation.path}/`)),
+          )}
+          onClose={() => setMutation(null)}
+          onCompleted={(newPath) => {
+            refresh();
+            if (
+              selectedPath &&
+              (selectedPath === mutation.path || selectedPath.startsWith(`${mutation.path}/`))
+            ) {
+              if (mutation.operation === "delete") onClearSelection?.();
+              else onOpenFile(newPath + selectedPath.slice(mutation.path.length));
+            }
+          }}
+        />
       ) : null}
       {createDirectory !== null ? (
         <CreateFileDialog
