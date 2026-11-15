@@ -1,0 +1,347 @@
+name: Nightly
+
+# Builds and publishes one `dev` commit as a nightly prerelease. Sync starts
+# it; it can also be run by hand with a `dev` commit.
+#
+# Packaging is upstream's own release-desktop.yml, called from `dev`, so its
+# fixes arrive with every sync. The jobs around it mirror the parts of
+# upstream's release.yml that apply to a fork: version, JS bundle, publish.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "dev commit to build (full SHA)"
+        required: true
+        type: string
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+permissions:
+  # Windows packaging reads this run's artifact list to wait for the Linux CLI.
+  actions: read
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      name: ${{ steps.version.outputs.name }}
+      clerk_publishable_key: ${{ steps.connect.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ steps.connect.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ steps.connect.outputs.relay_url }}
+    steps:
+      - name: Check the commit is on dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$REF...dev" --jq .status)"
+          [[ "$status" == "identical" || "$status" == "ahead" ]] ||
+            { echo "$REF is not on dev ($status)" >&2; exit 1; }
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/scripts...
+
+      - id: version
+        run: |
+          node scripts/resolve-nightly-release.ts \
+            --date "$(date -u +%Y%m%d)" \
+            --run-number "${{ github.run_number }}" \
+            --sha "${{ inputs.ref }}" \
+            --github-output
+
+      # T3 Connect's public production values, as upstream ships them for forks.
+      - id: connect
+        run: |
+          value() { sed -n "s|^T3CODE_$1=||p" .env.example; }
+          {
+            echo "clerk_publishable_key=$(value CLERK_PUBLISHABLE_KEY)"
+            echo "clerk_jwt_template=$(value CLERK_JWT_TEMPLATE)"
+            echo "clerk_cli_oauth_client_id=$(value CLERK_CLI_OAUTH_CLIENT_ID)"
+            echo "relay_url=$(value RELAY_URL)"
+          } | tee -a "$GITHUB_OUTPUT"
+          ! grep -q '=$' "$GITHUB_OUTPUT"
+
+  build_bundle:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      T3CODE_RELAY_URL: ${{ needs.preflight.outputs.relay_url }}
+      T3CODE_TELEMETRY_CHANNEL: dev
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+
+      - run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
+
+      - run: vp run build:desktop:bundle
+
+      # The artifact root is apps/; packaging jobs download it into apps/.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: js-bundle
+          path: |
+            apps/server/dist
+            apps/desktop/dist-electron
+          if-no-files-found: error
+          retention-days: 1
+
+  # Upstream's targets on GitHub-hosted runners. No secrets are passed: the
+  # builds are unsigned. To sign, pass the signing secrets by name here.
+  desktop_mac_arm64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: macOS arm64
+      runner: macos-26
+      platform: mac
+      target: dmg
+      arch: arm64
+      rust_target: aarch64-apple-darwin
+      resource_key: darwin-arm64
+      cli_archive: true
+      launch_check: true
+      save_pnpm_store: false
+
+  desktop_mac_x64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: macOS x64
+      runner: macos-26
+      platform: mac
+      target: dmg
+      arch: x64
+      rust_target: x86_64-apple-darwin
+      resource_key: darwin-x64
+      cli_archive: false
+
+  desktop_linux_x64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: Linux x64
+      runner: ubuntu-24.04
+      platform: linux
+      target: AppImage
+      arch: x64
+      rust_target: x86_64-unknown-linux-gnu
+      resource_key: linux-x64
+      cli_archive: true
+      launch_check: true
+
+  desktop_linux_arm64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: Linux arm64
+      runner: ubuntu-24.04-arm
+      platform: linux
+      target: AppImage
+      arch: arm64
+      rust_target: aarch64-unknown-linux-gnu
+      resource_key: linux-arm64
+      cli_archive: true
+
+  desktop_win_x64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: Windows x64
+      runner: ubuntu-24.04
+      verify_runner: windows-2025
+      platform: win
+      target: nsis
+      arch: x64
+      rust_target: x86_64-pc-windows-msvc
+      resource_key: win32-x64
+      cli_archive: true
+
+  desktop_win_arm64:
+    needs: [preflight, build_bundle]
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      ref: ${{ inputs.ref }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.preflight.outputs.relay_url }}
+      label: Windows arm64
+      runner: ubuntu-24.04
+      verify_runner: windows-11-arm
+      platform: win
+      target: nsis
+      arch: arm64
+      rust_target: aarch64-pc-windows-msvc
+      resource_key: win32-arm64
+      cli_archive: true
+
+  publish:
+    needs:
+      [
+        preflight,
+        desktop_mac_arm64,
+        desktop_mac_x64,
+        desktop_linux_x64,
+        desktop_linux_arm64,
+        desktop_win_x64,
+        desktop_win_arm64,
+      ]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ needs.preflight.outputs.tag }}
+      NAME: ${{ needs.preflight.outputs.name }}
+      REF: ${{ inputs.ref }}
+    steps:
+      # Publishing creates the tag on a commit that changes workflow files.
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/scripts...
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cli-*
+          merge-multiple: true
+          path: release-assets
+
+      # Installers verify archives against this file.
+      - working-directory: release-assets
+        run: |
+          shopt -s nullglob
+          archives=(t3-*.tar.gz t3-*.zip)
+          (( ${#archives[@]} > 0 )) || { echo "No CLI archives were produced." >&2; exit 1; }
+          sha256sum "${archives[@]}" > SHA256SUMS
+
+      # electron-updater reads one manifest per platform covering both architectures.
+      - run: node scripts/merge-release-update-manifests.ts release-assets
+
+      - name: Write release notes
+        run: |
+          upstream="$(git merge-base "$REF" origin/main)"
+          {
+            echo "Upstream [\`${upstream:0:10}\`](https://github.com/pingdotgg/t3code/commit/$upstream), plus:"
+            echo
+            git log --reverse --format='- %s' "$upstream..$REF"
+          } > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      # A draft hides the release until every file is attached; publishing it
+      # creates the tag. Updaters only see the finished release.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          shopt -s nullglob extglob
+          files=(release-assets/*.{dmg,zip,AppImage,deb,exe,blockmap,tar.gz} release-assets/!(builder-debug).yml release-assets/SHA256SUMS)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --prerelease --latest=false \
+            --target "$REF" --title "$NAME" --notes-file notes.md "${files[@]}"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      # Desktop nightlies find their update through update-feed/nightly.json
+      # (upstream's electron-updater patch), so point it at this release.
+      - name: Point the update feed at this nightly
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '{tag_name, name, body}' > nightly.json
+          gh release view update-feed > /dev/null 2>&1 ||
+            gh release create update-feed --prerelease --latest=false --title "Update feed" \
+              --notes "Desktop nightlies read nightly.json here to find the newest nightly. Do not delete it."
+          gh release upload update-feed nightly.json --clobber
+          gh release edit update-feed --draft=false --prerelease --latest=false

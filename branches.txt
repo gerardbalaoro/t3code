@@ -1,0 +1,9 @@
+# Branches applied on top of upstream main, in this order, to build `dev`.
+# One per line. A bare name is a branch in this fork. To use a branch from
+# another fork, write its clone URL, a space, then the branch name.
+#
+#   feature/example
+#   https://github.com/someone/t3code.git fix-something
+
+feature/self-update
+feature/create-files

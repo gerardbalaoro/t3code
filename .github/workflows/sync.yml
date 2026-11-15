@@ -1,0 +1,97 @@
+name: Sync
+
+# Keeps `main` equal to upstream, rebuilds `dev` from branches.txt, and starts
+# a nightly when `dev` has changed since the last one.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  push:
+    branches: [patch]
+    paths: [branches.txt, sync.sh]
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: "Start a nightly even if the last one is under 6 hours old"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # The default token cannot push commits that change workflow files, and
+      # upstream's commits do. The app can, and only on this repository.
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          path: patch
+
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          path: work
+          fetch-depth: 0
+          filter: blob:none
+          token: ${{ steps.app.outputs.token }}
+
+      - id: sync
+        working-directory: work
+        env:
+          SYNC_REPORT: ${{ runner.temp }}/sync-report.txt
+        run: |
+          git config user.name "${{ steps.app.outputs.app-slug }}[bot]"
+          git config user.email "${{ steps.app.outputs.app-slug }}[bot]@users.noreply.github.com"
+          ../patch/sync.sh
+
+      - name: Explain a blocked sync
+        if: failure() && steps.sync.outcome == 'failure'
+        run: |
+          {
+            echo "## dev was not updated"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/sync-report.txt" 2>/dev/null || echo "See the sync step's log."
+            echo '```'
+            echo
+            echo "The previous dev and nightly are unchanged."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start a nightly if due
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV: ${{ steps.sync.outputs.dev }}
+          FORCE: ${{ inputs.nightly == true }}
+        run: |
+          if [[ -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly.yml --json status --jq '.[] | select(.status != "completed") | .status')" ]]; then
+            echo "A nightly is already running."
+            exit 0
+          fi
+          last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\."))][0] // empty | "\(.target_commitish) \(.published_at)"')"
+          read -r last_ref last_at <<<"$last"
+          if [[ "$last_ref" == "$DEV" ]]; then
+            echo "The latest nightly already has this dev."
+            exit 0
+          fi
+          # Upstream also waits 6 hours between nightlies.
+          if [[ "$FORCE" != "true" && -n "$last_at" ]] &&
+            (( $(date +%s) - $(date -d "$last_at" +%s) < 6 * 3600 )); then
+            echo "The last nightly is under 6 hours old."
+            exit 0
+          fi
+          gh workflow run nightly.yml --repo "$GITHUB_REPOSITORY" --ref patch -f ref="$DEV"
+          echo "Started a nightly for $DEV." >> "$GITHUB_STEP_SUMMARY"
