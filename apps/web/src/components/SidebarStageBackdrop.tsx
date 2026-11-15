@@ -7,7 +7,7 @@ import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev";
-export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
+export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly" | "Gerard";
 
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
@@ -19,7 +19,7 @@ export function resolveSidebarStageBackdropVariant(
   if (mode === "dev-artwork") return "dev";
   if (mode !== "artwork") return null;
   const normalized = stageLabel.trim().toLowerCase();
-  if (normalized === "nightly") return "nightly";
+  if (normalized === "nightly" || normalized === "gerard") return "nightly";
   if (normalized === "dev") return "dev";
   return null;
 }
@@ -32,6 +32,8 @@ export function resolveEnvironmentIdentificationPillLabel(
   if (normalized === "dev") return "Dev";
   // oxlint-disable-next-line t3code/no-untranslated-copy -- release channel names
   if (normalized === "nightly") return "Nightly";
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- fork branding
+  if (normalized === "gerard") return "Gerard";
   return null;
 }
 
