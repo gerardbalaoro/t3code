@@ -11,7 +11,7 @@ These branches are applied to upstream main, in this order. `branches.txt` sets 
 
 | Branch | Change |
 | --- | --- |
-| `feature/self-update` | Points `t3 update`, the install scripts, SSH host installs, and the startup recovery link at this fork's releases. Without it, a fork build updates itself to upstream's build. |
+| `feature/update` | Keeps this fork's builds on this fork's releases. It points `t3 update`, the install scripts, SSH host installs, and the startup recovery link here, and the install scripts default to nightly. It labels builds **Gerard** in the window title and sidebar, and hides the Update track setting, because this fork publishes one track. |
 | `feature/create-files` | Adds a **New file** action to the workspace files panel. |
 
 ## Branches
@@ -28,7 +28,7 @@ These branches are applied to upstream main, in this order. `branches.txt` sets 
 1. **Sync** runs every hour. It also runs when `branches.txt` or `sync.sh` changes, or when you start it by hand.
 2. Sync copies upstream main to `main`. It then rebuilds `dev` by replaying each listed branch on top. It never changes the feature branches.
 3. Sync starts **Nightly** if `dev` changed and the last nightly is at least 6 hours old.
-4. Nightly builds `dev` with upstream's own packaging workflow, then publishes a prerelease, such as `v0.1.10-nightly.20261115.2`.
+4. Nightly builds `dev` with upstream's own packaging workflow, then publishes it as the latest release, such as `v0.1.10-nightly.20261115.2`.
 5. Installed apps and `t3 update` find the new release.
 
 To build a nightly now, run Sync by hand and check **nightly**.
@@ -58,8 +58,16 @@ Install the desktop app from the latest nightly release. The app includes the `t
 On a headless machine, run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/scripts/install.sh | T3CODE_CHANNEL=nightly sh
+curl -fsSL https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/scripts/install.sh | sh
 ```
+
+With [mise](https://mise.jdx.dev), install it with the GitHub backend instead:
+
+```sh
+mise use -g github:gerardbalaoro/t3code
+```
+
+mise installs a new release only after it is a day old, and `mise up` updates it.
 
 Do not use the `t3` npm package. It is upstream's build and updates to upstream's releases.
 

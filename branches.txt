@@ -5,5 +5,5 @@
 #   feature/example
 #   https://github.com/someone/t3code.git fix-something
 
-feature/self-update
+feature/update
 feature/create-files
