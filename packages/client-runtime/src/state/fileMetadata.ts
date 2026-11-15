@@ -80,8 +80,14 @@ export function createFileMetadataAtoms<R, E>(
   const revisions = Atom.family((key: string) =>
     Atom.make(0).pipe(Atom.withLabel(`file-metadata-revision:${key}`)),
   );
-  const revision = (environmentId: EnvironmentId, path: string) =>
-    revisions(JSON.stringify([environmentId, normalizeProjectPathForComparison(path)]));
+  const observedPaths = new Map<EnvironmentId, Set<string>>();
+  const revision = (environmentId: EnvironmentId, path: string) => {
+    let paths = observedPaths.get(environmentId);
+    if (!paths) observedPaths.set(environmentId, (paths = new Set()));
+    paths.add(path);
+    if (paths.size > METADATA_CACHE_LIMIT) paths.delete(paths.values().next().value!);
+    return revisions(JSON.stringify([environmentId, normalizeProjectPathForComparison(path)]));
+  };
   const knownEntry = (session: RpcSession, path: string, now: number) => {
     const key = normalizeProjectPathForComparison(path);
     const cached = cache.get(session)?.get(key);
@@ -362,6 +368,10 @@ export function createFileMetadataAtoms<R, E>(
     rememberFile,
     seedAfterRead,
     invalidate,
+    affectedPaths: (environmentId: EnvironmentId, roots: ReadonlyArray<string>) =>
+      [...new Set([...roots, ...(observedPaths.get(environmentId) ?? [])])].filter((path) =>
+        roots.some((root) => path === root || path.startsWith(`${root}/`)),
+      ),
     refreshPath,
   };
 }
