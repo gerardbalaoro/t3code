@@ -166,6 +166,7 @@ interface FilePreviewPanelProps {
   revealLine: number | null;
   revealRequestId: number;
   onOpenFile: (relativePath: string) => void;
+  onClearSelection?: () => void;
   onNavigateFolder: (relativePath: string, folderTrail: string, keepSource: boolean) => void;
   /** Retained descendant breadcrumb path after navigating up; see navigateFolder. */
   folderTrail: string | undefined;
@@ -1298,6 +1299,7 @@ function FilePreviewPanelContent({
   revealLine,
   revealRequestId,
   onOpenFile,
+  onClearSelection,
   onNavigateFolder,
   folderTrail,
   onPendingChange,
@@ -1980,6 +1982,8 @@ function FilePreviewPanelContent({
                 }
                 selectedPathRevealId={revealRequestId}
                 onOpenFile={onOpenFile}
+                onClearSelection={onClearSelection}
+                selectedFilePending={selectedFilePending}
                 answersPanelFind={!previewPath}
                 workspaceMutationId={workspaceMutationId}
                 {...(previewPath && !isMedia && !isPdf
