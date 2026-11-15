@@ -70,11 +70,15 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
-  it.effect("requires the destination filesystem write grant to create a file", () =>
+  it.effect.each([
+    WS_METHODS.projectsCreateFile,
+    WS_METHODS.projectsRenameEntry,
+    WS_METHODS.projectsDeleteEntry,
+  ] as const)("requires the destination filesystem write grant for %s", (method) =>
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* setup;
-        const create = createCommandPermissions(runtime, "projects.createFile");
+        const create = createCommandPermissions(runtime, method);
         registry.set(sessions(env), AsyncResult.success(grant(true)));
         expect(registry.get(create.permissionAtom(env))).toBe(false);
         expect((yield* create.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
