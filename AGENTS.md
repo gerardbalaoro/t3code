@@ -23,18 +23,23 @@ t3code/                 the root checkout, always on `patch`; this file
 Do this once on the machine that runs the schedule.
 
 1. Install `git`, `gh`, and the agent CLI. The worktree agents install T3 Code's own tools as its `AGENTS.md` describes.
-2. Create a fine-grained GitHub token for `gerardbalaoro/t3code` only, with **Contents**, **Workflows**, and **Actions** set to read and write. Workflows access is needed because rebased branches include upstream commits that change workflow files.
-3. Clone and configure:
+2. Sign `gh` in with access to `gerardbalaoro/t3code` that can push branches and run workflows. An existing login works. On a dedicated machine, create a fine-grained token for this repository only, with **Contents**, **Workflows**, and **Actions** set to read and write, then run `gh auth login --with-token < token.txt` and `gh auth setup-git`. Workflows access is needed because rebased branches include upstream commits that change workflow files. If git already uses another credential helper, pass `-c credential.helper= -c 'credential.helper=!gh auth git-credential'` to each `git push` instead of running `gh auth setup-git`.
+3. Clone the root checkout and add upstream:
 
    ```sh
    git clone --branch patch --filter=blob:none https://github.com/gerardbalaoro/t3code.git ~/t3code
    cd ~/t3code
    git remote add upstream https://github.com/pingdotgg/t3code.git
-   gh auth login --with-token < token.txt
-   gh auth setup-git
    ```
 
-4. Schedule the check every 30 minutes. `flock` skips a run while the previous one is still going:
+4. Create a worktree for each bare branch in `branches.txt` and install its dependencies, so the first scheduled run starts ready:
+
+   ```sh
+   git worktree add -B feature/update .worktrees/update origin/feature/update
+   (cd .worktrees/update && vp i)
+   ```
+
+5. Schedule the check every 30 minutes. `flock` skips a run while the previous one is still going:
 
    ```cron
    */30 * * * * cd ~/t3code && flock -n /tmp/t3code-fork.lock claude -p "Run the scheduled check in AGENTS.md." --permission-mode bypassPermissions >> ~/t3code-fork.log 2>&1
