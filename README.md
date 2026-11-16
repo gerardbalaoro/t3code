@@ -47,6 +47,8 @@ If a branch no longer applies to upstream's latest nightly, sync stops. It leave
 
 To fix it, rebase that branch onto `main` and push it. The next sync continues. You can also remove the branch from `branches.txt`.
 
+A scheduled agent can do the rebasing and start builds. [AGENTS.md](AGENTS.md) explains how to set one up.
+
 To test a sync without pushing, run this from a clone of this fork:
 
 ```sh
