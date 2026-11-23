@@ -55,8 +55,16 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - uses: ./.github/actions/setup-ci-deps
+        env:
+          pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
+
+      # Share the same lockfile verification with every packaging job, as upstream does.
+      - name: Upload dependency verification
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
         with:
-          install-args: --filter=@t3tools/scripts...
+          name: release-dependency-verification
+          path: ${{ runner.temp }}/pnpm-metadata/lockfile-verified.jsonl
 
       - id: version
         run: |
@@ -97,13 +105,36 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
+      - name: Download dependency verification
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: release-dependency-verification
+          path: ${{ runner.temp }}/pnpm-metadata
+
       - uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+        env:
+          pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
 
       - run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
-      - run: vp run build:desktop:bundle
+      - name: Check bundle-only build support
+        id: bundle_build
+        run: |
+          script="$(node -p "require('./package.json').scripts['build:desktop:bundle'] ? 'build:desktop:bundle' : 'build:desktop'")"
+          echo "script=$script" >> "$GITHUB_OUTPUT"
+
+      - if: steps.bundle_build.outputs.script == 'build:desktop'
+        uses: ./.github/actions/setup-apt-mirrors
+
+      - name: Install browser secret helper build libraries
+        if: steps.bundle_build.outputs.script == 'build:desktop'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+
+      - name: Build JS bundle
+        run: vp run ${{ steps.bundle_build.outputs.script }}
 
       # The artifact root is apps/; packaging jobs download it into apps/.
       - uses: actions/upload-artifact@v7
@@ -153,8 +184,8 @@ jobs:
       clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ needs.preflight.outputs.relay_url }}
       label: macOS x64
-      # Native Intel: under Rosetta, packaging's compile-cache step outlasts its timeout.
-      runner: macos-15-intel
+      # Match upstream: build x64 on macOS 26 with Xcode 26 and Rosetta.
+      runner: macos-26
       platform: mac
       target: dmg
       arch: x64
