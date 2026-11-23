@@ -184,8 +184,8 @@ jobs:
       clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ needs.preflight.outputs.relay_url }}
       label: macOS x64
-      # Match upstream: build x64 on macOS 26 with Xcode 26 and Rosetta.
-      runner: macos-26
+      # Xcode 26 matches upstream; native Intel avoids Rosetta compile-cache timeouts.
+      runner: macos-26-intel
       platform: mac
       target: dmg
       arch: x64
