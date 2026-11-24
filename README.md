@@ -59,6 +59,8 @@ DRY_RUN=1 /path/to/patch/sync.sh
 
 Install the desktop app from the latest nightly release. The app includes the `t3` command (**Settings → About → t3 command**). It also installs its own server into WSL.
 
+New macOS nightlies support Apple silicon (arm64) only. Windows and Linux nightlies support x64 and arm64.
+
 On a headless machine, run:
 
 ```sh

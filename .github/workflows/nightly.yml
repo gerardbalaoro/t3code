@@ -146,8 +146,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Upstream's targets on GitHub-hosted runners. No secrets are passed: the
-  # builds are unsigned. To sign, pass the signing secrets by name here.
+  # Use upstream's packaging on GitHub-hosted runners. macOS ships arm64 only.
+  # Builds are unsigned. To sign, pass the signing secrets by name here.
   desktop_mac_arm64:
     needs: [preflight, build_bundle]
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
@@ -169,29 +169,6 @@ jobs:
       resource_key: darwin-arm64
       cli_archive: true
       launch_check: true
-      save_pnpm_store: false
-
-  desktop_mac_x64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: macOS x64
-      # Xcode 26 matches upstream; native Intel avoids Rosetta compile-cache timeouts.
-      runner: macos-26-intel
-      platform: mac
-      target: dmg
-      arch: x64
-      rust_target: x86_64-apple-darwin
-      resource_key: darwin-x64
-      cli_archive: false
 
   desktop_linux_x64:
     needs: [preflight, build_bundle]
@@ -285,7 +262,6 @@ jobs:
       [
         preflight,
         desktop_mac_arm64,
-        desktop_mac_x64,
         desktop_linux_x64,
         desktop_linux_arm64,
         desktop_win_x64,
@@ -339,8 +315,27 @@ jobs:
           (( ${#archives[@]} > 0 )) || { echo "No CLI archives were produced." >&2; exit 1; }
           sha256sum "${archives[@]}" > SHA256SUMS
 
-      # electron-updater reads one manifest per platform covering both architectures.
-      - run: node scripts/merge-release-update-manifests.ts release-assets
+      # The macOS manifest already contains its only architecture. Windows still
+      # needs both architectures in one feed. Use the Windows merger directly
+      # because upstream's all-platform merger requires a macOS x64 manifest.
+      - name: Merge Windows update manifests
+        shell: bash
+        run: |
+          shopt -s nullglob
+          mac=(release-assets/*-mac.yml)
+          win_x64=(release-assets/*-win-x64.yml)
+          win_arm64=(release-assets/*-win-arm64.yml)
+          if (( ${#mac[@]} == 0 || ${#win_x64[@]} == 0 || ${#win_x64[@]} != ${#win_arm64[@]} )); then
+            echo "Expected macOS arm64 manifests and complete Windows architecture pairs." >&2
+            exit 1
+          fi
+          for primary in "${win_x64[@]}"; do
+            channel="${primary%-win-x64.yml}"
+            secondary="$channel-win-arm64.yml"
+            [[ -f "$secondary" ]] || { echo "Missing Windows manifest: $secondary" >&2; exit 1; }
+            node scripts/merge-update-manifests.ts --platform win "$primary" "$secondary" "$channel.yml"
+            rm -- "$primary" "$secondary"
+          done
 
       # dev is upstream's latest nightly plus the branches, so the fork point
       # with upstream main is the nightly's commit.
