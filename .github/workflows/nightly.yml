@@ -376,22 +376,27 @@ jobs:
           } > notes.md
           cat notes.md >> "$GITHUB_STEP_SUMMARY"
 
-      # A draft hides the release until every file is attached; publishing it
-      # creates the tag. Updaters only see the finished release. Updaters match
-      # "nightly" in the tag, not the prerelease flag, so a full release lets
-      # tools that follow GitHub's Latest release, such as mise, find it.
+      # A draft hides a new release until every file is attached and the tag
+      # points to the build commit. Publish as Latest so mise can find it.
+      # Updaters match "nightly" in the tag regardless of the prerelease flag.
       - name: Publish
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           shopt -s nullglob extglob
           files=(release-assets/*.{dmg,zip,AppImage,deb,exe,blockmap,tar.gz} release-assets/!(builder-debug).yml release-assets/SHA256SUMS)
-          if release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isImmutable)"; then
+          if release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isImmutable)"; then
             if jq -e '.isImmutable' <<< "$release" >/dev/null; then
               echo "GitHub marked release $TAG immutable." >&2
               exit 1
             fi
             gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+            previous_assets="$(jq -r '.assets[].name' <<< "$release")"
+            while IFS= read -r asset; do
+              if [[ -n "$asset" ]] && ! printf '%s\n' "${files[@]##*/}" | grep -Fx -- "$asset" >/dev/null; then
+                gh release delete-asset "$TAG" "$asset" --repo "$GITHUB_REPOSITORY" --yes
+              fi
+            done <<< "$previous_assets"
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
               --target "$REF" --title "$NAME" --notes-file notes.md "${files[@]}"
