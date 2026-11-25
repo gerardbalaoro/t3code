@@ -2,7 +2,7 @@
 
 Read [README.md](README.md) for the branch layout and release flow. Keep this checkout on `main`. Work on application branches in `.worktrees/`.
 
-Sync owns `upstream/main`, `dev/main`, and `dev/patch`. Nightly owns releases and the `update-feed` release. Change project files on `main` when Gerard requests them. Push only the bare feature branches listed in `branches.txt` during scheduled maintenance, with `--force-with-lease`.
+Sync owns `upstream/main` and `dev/main`. Nightly owns releases and the `update-feed` release. Change project files on `main` when Gerard requests them. During scheduled maintenance, push bare branches listed in `branches.txt` with `--force-with-lease`.
 
 ## Scheduled check
 
@@ -16,13 +16,13 @@ Sync owns `upstream/main`, `dev/main`, and `dev/patch`. Nightly owns releases an
    ```
 
 3. If a Sync or Nightly run is active on `gerardbalaoro/t3code`, report **build in progress** and finish. For each bare branch in `branches.txt`, get its base with `git merge-base origin/<branch> upstream/main`. Skip entries with clone URLs. If all bases match the nightly commit and the latest G Code release names that tag, report **up to date**. Also check the update feed if the applicable Nightly failed after publication.
-4. For each feature branch with an older base, in file order, prepare `.worktrees/<name>`, where `<name>` is the branch name without `feature/`. Start from `origin/<branch>`. Preserve any local changes and report a branch as blocked if they prevent a safe rebase.
+4. For each bare branch with an older base, prepare a worktree in file order. Use `.worktrees/<name>` for `feature/<name>` and `.worktrees/dev-patch` for `dev/patch`. Start from `origin/<branch>`. Preserve any local changes and report a branch as blocked if they prevent a safe rebase.
 
    Start a separate foreground agent session in that worktree so it loads the application's own `AGENTS.md`. Use the same agent CLI and permission mode. Give it the branch, base, and target commit and this brief:
 
    > Run `git rebase --onto <target commit> <base> <branch>`. Resolve conflicts while preserving both changes. Follow this worktree's instructions to install dependencies and run `vp run check:changed` with the repository-local `vp`. After checks pass, push with `git push --force-with-lease origin <branch>`. If blocked, abort any incomplete rebase, restore the original branch head, and push nothing. Return `<branch>: rebased <head SHA>` or `<branch>: blocked <reason>`.
 
-5. Dispatch Sync with `gh workflow run sync.yml --repo gerardbalaoro/t3code --ref main`. Find the run ID with `gh run list --repo gerardbalaoro/t3code --workflow sync.yml --branch main`. Wait for its result and for any Nightly started by that run. If Sync cannot replay overlapping features or apply a fork patch, report the blocking file and patch or branch. If Nightly publishes, verify the release names the target tag. Report the branch results, workflow status, and release link.
+5. Dispatch Sync with `gh workflow run sync.yml --repo gerardbalaoro/t3code --ref main`. Find the run ID with `gh run list --repo gerardbalaoro/t3code --workflow sync.yml --branch main`. Wait for its result and for any Nightly started by that run. If Sync reports a conflict, report the branch and files. If Nightly publishes, verify the release names the target tag. Report the branch results, workflow status, and release link.
 
 ## Test Sync locally
 

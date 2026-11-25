@@ -1,3 +1,5 @@
 # Feature branches applied in order to upstream/main to produce dev/main.
 # Use a branch name from this fork, or a clone URL followed by a branch name.
 feature/create-files
+# Apply the distribution changes last.
+dev/patch

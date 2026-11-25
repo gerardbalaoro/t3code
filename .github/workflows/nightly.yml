@@ -1,16 +1,16 @@
 name: Nightly
 
-# Builds and publishes one `dev/patch` commit as a nightly release. Sync starts
-# it; it can also be run by hand with a `dev/patch` commit.
+# Builds and publishes one `dev/main` commit as a nightly release. Sync starts
+# it; it can also be run by hand with a `dev/main` commit.
 #
-# Packaging is upstream's own release-desktop.yml, called from `dev/patch`, so its
+# Packaging is upstream's own release-desktop.yml, called from `dev/main`, so its
 # fixes arrive with every sync. The jobs around it mirror the parts of
 # upstream's release.yml that apply to a fork: version, JS bundle, publish.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "dev/patch commit to build (full SHA)"
+        description: "dev/main commit to build (full SHA)"
         required: true
         type: string
 
@@ -36,16 +36,16 @@ jobs:
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ steps.connect.outputs.relay_url }}
     steps:
-      - name: Check the commit is on dev/patch
+      - name: Check the commit is on dev/main
         env:
           GH_TOKEN: ${{ github.token }}
           REF: ${{ inputs.ref }}
         run: |
           [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
-          head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/dev/patch" --jq .object.sha)"
+          head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/dev/main" --jq .object.sha)"
           status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$REF...$head" --jq .status)"
           [[ "$status" == "identical" || "$status" == "ahead" ]] ||
-            { echo "$REF is not on dev/patch ($status)" >&2; exit 1; }
+            { echo "$REF is not on dev/main ($status)" >&2; exit 1; }
 
       - uses: actions/checkout@v6
         with:
@@ -151,7 +151,7 @@ jobs:
   # Builds are unsigned. To sign, pass the signing secrets by name here.
   desktop_mac_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -173,7 +173,7 @@ jobs:
 
   desktop_linux_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -195,7 +195,7 @@ jobs:
 
   desktop_linux_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -216,7 +216,7 @@ jobs:
 
   desktop_win_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -238,7 +238,7 @@ jobs:
 
   desktop_win_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}

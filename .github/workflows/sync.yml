@@ -1,12 +1,12 @@
 name: Sync
 
-# Replays features and fork patches on the latest upstream nightly.
+# Replays the branches listed in branches.txt on the latest upstream nightly.
 on:
   schedule:
     - cron: "8,23,38,53 * * * *"
   push:
     branches: [main]
-    paths: [branches.txt, sync.sh, "patches/**", ".github/workflows/*.yml"]
+    paths: [branches.txt, sync.sh, ".github/workflows/*.yml"]
   workflow_dispatch:
     inputs:
       nightly:
@@ -106,7 +106,7 @@ jobs:
         if: steps.sync.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          DEV: ${{ steps.sync.outputs.dev_patch }}
+          DEV: ${{ steps.sync.outputs.dev_main }}
           UPSTREAM_NIGHTLY: ${{ steps.sync.outputs.upstream_nightly }}
           FORCE: ${{ inputs.nightly == true }}
         run: |
@@ -119,7 +119,7 @@ jobs:
             --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
           read -r last_ref last_upstream <<<"$last"
           if [[ "$last_ref" == "$DEV" ]]; then
-            echo "The latest nightly already contains this dev/patch commit."
+            echo "The latest nightly already contains this dev/main commit."
             exit 0
           fi
           if [[ "$FORCE" != "true" && "$last_upstream" == "$UPSTREAM_NIGHTLY" ]]; then
