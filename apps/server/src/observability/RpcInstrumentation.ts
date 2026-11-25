@@ -198,6 +198,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.projectsSearchEntries]: "workspace",
   [WS_METHODS.projectsWriteFile]: "workspace",
   [WS_METHODS.projectsCreateFile]: "workspace",
+  [WS_METHODS.projectsCreateDirectory]: "workspace",
   [WS_METHODS.projectsRenameEntry]: "workspace",
   [WS_METHODS.projectsDeleteEntry]: "workspace",
   [WS_METHODS.projectsEnsureScratch]: "orchestration",
