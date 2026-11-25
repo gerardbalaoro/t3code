@@ -483,6 +483,7 @@ it.effect.each([WS_METHODS.subscribeVcsBranch, WS_METHODS.subscribeVcsStatus] as
 
 it.effect.each([
   WS_METHODS.projectsCreateFile,
+  WS_METHODS.projectsCreateDirectory,
   WS_METHODS.projectsRenameEntry,
   WS_METHODS.projectsDeleteEntry,
 ] as const)("authorizes %s only with filesystem write permission", (method) =>
@@ -494,10 +495,12 @@ it.effect.each([
         ): tag is Exclude<
           keyof typeof RPC_REQUIRED_SCOPES,
           | typeof WS_METHODS.projectsCreateFile
+          | typeof WS_METHODS.projectsCreateDirectory
           | typeof WS_METHODS.projectsRenameEntry
           | typeof WS_METHODS.projectsDeleteEntry
         > =>
           tag !== WS_METHODS.projectsCreateFile &&
+          tag !== WS_METHODS.projectsCreateDirectory &&
           tag !== WS_METHODS.projectsRenameEntry &&
           tag !== WS_METHODS.projectsDeleteEntry,
       ),
@@ -508,6 +511,12 @@ it.effect.each([
         Effect.provide(
           Layer.mergeAll(
             group.toLayerHandler(WS_METHODS.projectsCreateFile, () =>
+              Effect.sync(() => {
+                handled++;
+                return { relativePath: "new.txt" };
+              }),
+            ),
+            group.toLayerHandler(WS_METHODS.projectsCreateDirectory, () =>
               Effect.sync(() => {
                 handled++;
                 return { relativePath: "new.txt" };
@@ -532,7 +541,8 @@ it.effect.each([
         ),
       );
       const input = { cwd: "/workspace", relativePath: "new.txt", newRelativePath: "renamed.txt" };
-      const result = yield* method === WS_METHODS.projectsCreateFile
+      const result = yield* method === WS_METHODS.projectsCreateFile ||
+      method === WS_METHODS.projectsCreateDirectory
         ? client[method](input).pipe(Effect.result)
         : method === WS_METHODS.projectsRenameEntry
           ? client[method](input).pipe(Effect.result)

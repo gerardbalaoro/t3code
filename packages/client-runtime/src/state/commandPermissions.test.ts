@@ -73,6 +73,7 @@ const setup = Effect.gen(function* () {
 describe("command permissions", () => {
   it.effect.each([
     WS_METHODS.projectsCreateFile,
+    WS_METHODS.projectsCreateDirectory,
     WS_METHODS.projectsRenameEntry,
     WS_METHODS.projectsDeleteEntry,
   ] as const)("requires the destination filesystem write grant for %s", (method) =>
