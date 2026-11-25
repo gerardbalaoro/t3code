@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "T3 Code",
-  "short_name": "T3 Code",
+  "name": "G Code",
+  "short_name": "G Code",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
