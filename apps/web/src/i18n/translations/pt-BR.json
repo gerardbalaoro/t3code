@@ -4301,7 +4301,6 @@
   ],
   "159ddd0d146a0f22": "Acompanhando: o agente é ativado quando as verificações terminam, alguém comenta ou o branch entra em conflito. Clique para parar.",
   "1cbc8b5db51b4c77": "Mesclar",
-  "353b08f4363dbb2c": "Pending",
   "7342bfc328008926": "Running",
   "fae3639874428042": "Tasks",
   "291bc7eb04e08b2e": "All done",
@@ -13162,5 +13161,49 @@
   "236911500e5aff7c": "Os agentes ficam esperando enquanto o sistema libera memória.",
   "81aafe06d7fede9a": "Onde o T3 Code guarda seus dados e worktrees",
   "9429f8ff8866edac": "CPU",
-  "79a21371b8db96da": "O trabalho espera por uma CPU livre ou pelo disco, então os agentes ficam lentos."
+  "79a21371b8db96da": "O trabalho espera por uma CPU livre ou pelo disco, então os agentes ficam lentos.",
+  "d83e2ecc6c831f72": "Could not create file. Try again.",
+  "cd6cdd50959aed9c": [
+    "Enter a path relative to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Missing folders will be created."
+  ],
+  "23158ae6eacf4736": "Caminho do arquivo",
+  "6a1f875982918d7e": "File creation is unavailable on this connection.",
+  "a9259586993dea80": "Criando…",
+  "baaf07d893736ec8": "Criar",
+  "1f3abea230ca5224": "Could not change entry. Try again.",
+  "d623e937acd85cfe": "Rename folder",
+  "571baa956c2e551a": "Rename file",
+  "bf919920ecc83b13": "Delete folder",
+  "65b1d31fd5ed3cf3": "Delete file",
+  "fd8e23000dcf1e37": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "” and all its contents? This cannot be undone."
+  ],
+  "05e685e0091c42c8": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "”? This cannot be undone."
+  ],
+  "ed37ec213f383c3e": "Save or discard the open file’s edits before changing it or its folder.",
+  "6273f05b0284c6ae": "This operation is unavailable on this connection.",
+  "4ded69266072369e": "Trabalhando…",
+  "9b20df3e21a3d401": "Renomear",
+  "aba29e77e52bca46": "Excluir",
+  "cb47b5907e24179f": "Novo arquivo",
+  "da49b8271b9dffa0": "Excluir"
 }

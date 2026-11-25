@@ -4288,7 +4288,6 @@
   ],
   "159ddd0d146a0f22": "지켜보는 중: 검사가 끝나거나, 누군가 댓글을 달거나, 브랜치가 충돌하면 에이전트가 깨어납니다. 클릭하여 중지하세요.",
   "1cbc8b5db51b4c77": "병합",
-  "353b08f4363dbb2c": "Pending",
   "7342bfc328008926": "Running",
   "fae3639874428042": "Tasks",
   "291bc7eb04e08b2e": "All done",
@@ -13095,5 +13094,49 @@
   "236911500e5aff7c": "시스템이 메모리를 확보하는 동안 에이전트가 계속 기다리고 있습니다.",
   "81aafe06d7fede9a": "T3 Code가 데이터와 워크트리를 보관하는 곳",
   "9429f8ff8866edac": "CPU",
-  "79a21371b8db96da": "작업이 여유 CPU나 디스크를 기다리고 있어 에이전트가 느리게 실행됩니다."
+  "79a21371b8db96da": "작업이 여유 CPU나 디스크를 기다리고 있어 에이전트가 느리게 실행됩니다.",
+  "d83e2ecc6c831f72": "Could not create file. Try again.",
+  "cd6cdd50959aed9c": [
+    "Enter a path relative to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Missing folders will be created."
+  ],
+  "23158ae6eacf4736": "파일 경로",
+  "6a1f875982918d7e": "File creation is unavailable on this connection.",
+  "a9259586993dea80": "만드는 중…",
+  "baaf07d893736ec8": "만들기",
+  "1f3abea230ca5224": "Could not change entry. Try again.",
+  "d623e937acd85cfe": "Rename folder",
+  "571baa956c2e551a": "Rename file",
+  "bf919920ecc83b13": "Delete folder",
+  "65b1d31fd5ed3cf3": "Delete file",
+  "fd8e23000dcf1e37": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "” and all its contents? This cannot be undone."
+  ],
+  "05e685e0091c42c8": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "”? This cannot be undone."
+  ],
+  "ed37ec213f383c3e": "Save or discard the open file’s edits before changing it or its folder.",
+  "6273f05b0284c6ae": "This operation is unavailable on this connection.",
+  "4ded69266072369e": "작업 중…",
+  "9b20df3e21a3d401": "이름 바꾸기",
+  "aba29e77e52bca46": "삭제",
+  "cb47b5907e24179f": "새 파일",
+  "da49b8271b9dffa0": "삭제"
 }
