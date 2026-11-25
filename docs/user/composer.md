@@ -434,8 +434,8 @@ can break the preview, so save a copy if you need to keep it.
 
 ## Create, rename, and delete workspace files
 
-On web and desktop, open **Files** and select **New file** to create an empty workspace file.
-To start in a folder, right-click that folder and select **New file**.
+On web and desktop, right-click empty space in **Files** and select **New file**.
+To start in a folder, right-click the folder and select **New file**.
 Enter a workspace-relative path, such as `src/example.ts`.
 T3 Code creates missing parent folders and opens the new file in the editor.
 Existing files remain unchanged.
