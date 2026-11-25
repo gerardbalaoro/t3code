@@ -1,4 +1,4 @@
-<p align="center"><img src="branding/g.svg" alt="" width="32" height="40"></p>
+<p align="center"><img src="assets/g.svg" alt="" width="32" height="40"></p>
 
 # G Code
 
