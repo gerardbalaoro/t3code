@@ -13056,5 +13056,49 @@
   "5807c08e225c6b3d": "Download",
   "0d50b5bfe7151ece": "Could not download file",
   "eb1fd384ad5919dd": "Internal note",
-  "b45f0b467e9406d0": "Reply to customer"
+  "b45f0b467e9406d0": "Reply to customer",
+  "d83e2ecc6c831f72": "Could not create file. Try again.",
+  "cd6cdd50959aed9c": [
+    "Enter a path relative to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Missing folders will be created."
+  ],
+  "23158ae6eacf4736": "File path",
+  "6a1f875982918d7e": "File creation is unavailable on this connection.",
+  "a9259586993dea80": "Creating…",
+  "baaf07d893736ec8": "Create",
+  "1f3abea230ca5224": "Could not change entry. Try again.",
+  "d623e937acd85cfe": "Rename folder",
+  "571baa956c2e551a": "Rename file",
+  "bf919920ecc83b13": "Delete folder",
+  "65b1d31fd5ed3cf3": "Delete file",
+  "fd8e23000dcf1e37": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "” and all its contents? This cannot be undone."
+  ],
+  "05e685e0091c42c8": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "”? This cannot be undone."
+  ],
+  "ed37ec213f383c3e": "Save or discard the open file’s edits before changing it or its folder.",
+  "6273f05b0284c6ae": "This operation is unavailable on this connection.",
+  "4ded69266072369e": "Working…",
+  "9b20df3e21a3d401": "Rename",
+  "aba29e77e52bca46": "Delete",
+  "cb47b5907e24179f": "New file",
+  "da49b8271b9dffa0": "Delete"
 }

@@ -13062,5 +13062,49 @@
   "5807c08e225c6b3d": "下载",
   "0d50b5bfe7151ece": "无法下载文件",
   "eb1fd384ad5919dd": "内部备注",
-  "b45f0b467e9406d0": "回复客户"
+  "b45f0b467e9406d0": "回复客户",
+  "d83e2ecc6c831f72": "Could not create file. Try again.",
+  "cd6cdd50959aed9c": [
+    "Enter a path relative to ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ". Missing folders will be created."
+  ],
+  "23158ae6eacf4736": "文件路径",
+  "6a1f875982918d7e": "File creation is unavailable on this connection.",
+  "a9259586993dea80": "正在创建…",
+  "baaf07d893736ec8": "创建",
+  "1f3abea230ca5224": "Could not change entry. Try again.",
+  "d623e937acd85cfe": "Rename folder",
+  "571baa956c2e551a": "Rename file",
+  "bf919920ecc83b13": "Delete folder",
+  "65b1d31fd5ed3cf3": "Delete file",
+  "fd8e23000dcf1e37": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "” and all its contents? This cannot be undone."
+  ],
+  "05e685e0091c42c8": [
+    "Permanently delete “",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "”? This cannot be undone."
+  ],
+  "ed37ec213f383c3e": "Save or discard the open file’s edits before changing it or its folder.",
+  "6273f05b0284c6ae": "This operation is unavailable on this connection.",
+  "4ded69266072369e": "处理中…",
+  "9b20df3e21a3d401": "重命名",
+  "aba29e77e52bca46": "删除",
+  "cb47b5907e24179f": "新建文件",
+  "da49b8271b9dffa0": "删除"
 }
