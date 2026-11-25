@@ -1,5 +1,6 @@
 import type { ExpoConfig } from "expo/config";
 
+import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "preview" | "production";
@@ -24,6 +25,9 @@ const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
   ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
   : "https://observe.invalid";
 
+const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
+const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
+
 if (
   isIosPersonalTeamBuild &&
   (!personalTeamBundleIdentifier ||
@@ -34,11 +38,43 @@ if (
   );
 }
 
-const appIcon = "./assets/g-code/app-icon.png";
-const splashIcon = "./assets/g-code/splash.png";
-const androidAdaptiveIcon = {
-  backgroundColor: "#F5F0E8",
-  foregroundImage: "./assets/g-code/adaptive-foreground.png",
+const DEVELOPMENT_ASSETS = {
+  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
+  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
+  androidAdaptiveForeground,
+  androidAdaptiveBackgroundColor: "#347FF8",
+  androidAdaptiveBackgroundImage: "./assets/android-icon-background-dev.png",
+  androidSplashIcon: "./assets/android-splash-icon-dev.png",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#00639B",
+} as const;
+
+const PREVIEW_ASSETS = {
+  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIconComposerProject),
+  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
+  androidAdaptiveForeground,
+  androidAdaptiveBackgroundColor: "#111533",
+  androidAdaptiveBackgroundImage: "./assets/android-icon-background-nightly.png",
+  androidSplashIcon: "./assets/android-splash-icon-nightly.png",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#7565C7",
+} as const;
+
+const RELEASE_ASSETS = {
+  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIconComposerProject),
+  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+  androidAdaptiveForeground,
+  androidAdaptiveBackgroundColor: "#000000",
+  androidAdaptiveBackgroundImage: undefined,
+  androidSplashIcon: "./assets/android-splash-icon-prod.png",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#FFFFFF",
 } as const;
 
 const VARIANT_CONFIG = {
@@ -48,6 +84,7 @@ const VARIANT_CONFIG = {
     iosBundleIdentifier: "com.t3tools.t3code.dev",
     androidPackage: "com.t3tools.t3code.dev",
     relyingParty: "clerk.t3.codes",
+    assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "G Code Preview",
@@ -55,6 +92,7 @@ const VARIANT_CONFIG = {
     iosBundleIdentifier: "com.t3tools.t3code.preview",
     androidPackage: "com.t3tools.t3code.preview",
     relyingParty: "clerk.t3.codes",
+    assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "G Code",
@@ -62,6 +100,7 @@ const VARIANT_CONFIG = {
     iosBundleIdentifier: "com.t3tools.t3code",
     androidPackage: "com.t3tools.t3code",
     relyingParty: "clerk.t3.codes",
+    assets: RELEASE_ASSETS,
   },
 } as const;
 
@@ -204,7 +243,7 @@ const config: ExpoConfig = {
     policy: runtimeVersionPolicy,
   },
   orientation: "portrait",
-  icon: appIcon,
+  icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
@@ -213,7 +252,7 @@ const config: ExpoConfig = {
     fallbackToCacheTimeout: 0,
   },
   ios: {
-    icon: appIcon,
+    icon: variant.assets.iosIcon,
     supportsTablet: true,
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
@@ -258,14 +297,18 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    icon: appIcon,
+    icon: variant.assets.appIcon,
     package: variant.androidPackage,
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
     adaptiveIcon: {
-      ...androidAdaptiveIcon,
-      monochromeImage: androidAdaptiveIcon.foregroundImage,
+      backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
+      ...(variant.assets.androidAdaptiveBackgroundImage
+        ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+        : {}),
+      foregroundImage: variant.assets.androidAdaptiveForeground,
+      monochromeImage: variant.assets.androidMonochromeIcon,
     },
     // JS back dispatch needs RN's Android 16 shim and withAndroidPredictiveBackCompat on Android 13-15.
     predictiveBackGestureEnabled: true,
@@ -281,7 +324,7 @@ const config: ExpoConfig = {
     ],
   },
   web: {
-    favicon: appIcon,
+    favicon: variant.assets.appIcon,
   },
   plugins: [
     "expo-asset",
@@ -322,8 +365,8 @@ const config: ExpoConfig = {
     [
       "expo-notifications",
       {
-        icon: "./assets/g-code/notification.png",
-        color: "#191919",
+        icon: variant.assets.androidNotificationIcon,
+        color: variant.assets.androidNotificationColor,
         mode: APP_VARIANT === "development" ? "development" : "production",
       },
     ],
@@ -334,7 +377,13 @@ const config: ExpoConfig = {
       "expo-quick-actions",
       {
         androidIcons: {
-          shortcut_icon: androidAdaptiveIcon,
+          shortcut_icon: {
+            foregroundImage: variant.assets.androidAdaptiveForeground,
+            backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
+            ...(variant.assets.androidAdaptiveBackgroundImage
+              ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+              : {}),
+          },
         },
       },
     ],
@@ -367,19 +416,19 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: splashIcon,
+        image: variant.assets.splashIcon,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         imageWidth: 220,
         dark: {
-          image: splashIcon,
+          image: variant.assets.splashIcon,
           backgroundColor: "#0a0a0a",
         },
         android: {
           // Android 12+ masks the central two thirds of the 288dp canvas; adaptive layers avoid clipped corners.
-          image: splashIcon,
+          image: variant.assets.androidSplashIcon,
           imageWidth: 288,
-          dark: { image: splashIcon },
+          dark: { image: variant.assets.androidSplashIcon },
         },
       },
     ],
