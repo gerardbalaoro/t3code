@@ -50,6 +50,11 @@ while read -r first second _ || [[ -n "$first" ]]; do
     fail "Could not fetch $label."
   base="$(git merge-base refs/sync/feature refs/sync/upstream)" ||
     fail "$label shares no history with upstream main."
+  if [[ "$source_url" == origin && "$branch" == dev/patch ]]; then
+    if ! icon_review="$("$project_dir/check-upstream-icons.sh" "$base" "$upstream_commit" 2>&1)"; then
+      fail "$icon_review"
+    fi
+  fi
 
   # Rebase a detached checkout so Sync never modifies feature branches.
   current="$(git rev-parse HEAD)"

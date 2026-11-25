@@ -6,7 +6,7 @@ on:
     - cron: "8,23,38,53 * * * *"
   push:
     branches: [main]
-    paths: [branches.txt, sync.sh, ".github/workflows/*.yml"]
+    paths: [branches.txt, sync.sh, check-upstream-icons.sh, ".github/workflows/*.yml"]
   workflow_dispatch:
     inputs:
       nightly:
@@ -110,6 +110,11 @@ jobs:
           UPSTREAM_NIGHTLY: ${{ steps.sync.outputs.upstream_nightly }}
           FORCE: ${{ inputs.nightly == true }}
         run: |
+          state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml" --jq .state)"
+          if [[ "$state" != "active" ]]; then
+            echo "Nightly is paused." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if [[ -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly.yml --json status --jq '.[] | select(.status != "completed") | .status')" ]]; then
             echo "A nightly is already running."
             exit 0

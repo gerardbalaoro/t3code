@@ -34,6 +34,7 @@ The [Nightly workflow](.github/workflows/nightly.yml) packages a `dev/main` comm
 
 - Base each `feature/*` branch on `upstream/main`. Add it to `branches.txt` before `dev/patch`. For a branch in another fork, put its clone URL before the branch name.
 - Commit changes specific to this distribution on `dev/patch`.
+- Before rebasing `dev/patch` onto a new nightly, run `./check-upstream-icons.sh <base> <target>`. Review any listed upstream icon changes before rebasing.
 - If Sync stops on a branch conflict, check the run summary for the conflicting files. See [AGENTS.md](AGENTS.md) for maintenance and local validation.
 
 ## Publishing credentials

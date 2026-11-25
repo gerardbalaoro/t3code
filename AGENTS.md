@@ -18,6 +18,8 @@ Sync owns `upstream/main` and `dev/main`. Nightly owns releases and the `update-
 3. If a Sync or Nightly run is active on `gerardbalaoro/t3code`, report **build in progress** and finish. For each bare branch in `branches.txt`, get its base with `git merge-base origin/<branch> upstream/main`. Skip entries with clone URLs. If all bases match the nightly commit and the latest G Code release names that tag, report **up to date**. Also check the update feed if the applicable Nightly failed after publication.
 4. For each bare branch with an older base, prepare a worktree in file order. Use `.worktrees/<name>` for `feature/<name>` and `.worktrees/dev-patch` for `dev/patch`. Start from `origin/<branch>`. Preserve any local changes and report a branch as blocked if they prevent a safe rebase.
 
+   Before rebasing `dev/patch`, run `./check-upstream-icons.sh <base> <target commit>` from the root checkout. If it reports changes, stop and give Gerard the file list for review.
+
    Start a separate foreground agent session in that worktree so it loads the application's own `AGENTS.md`. Use the same agent CLI and permission mode. Give it the branch, base, and target commit and this brief:
 
    > Run `git rebase --onto <target commit> <base> <branch>`. Resolve conflicts while preserving both changes. Follow this worktree's instructions to install dependencies and run `vp run check:changed` with the repository-local `vp`. After checks pass, push with `git push --force-with-lease origin <branch>`. If blocked, abort any incomplete rebase, restore the original branch head, and push nothing. Return `<branch>: rebased <head SHA>` or `<branch>: blocked <reason>`.
