@@ -1,6 +1,6 @@
 # G Code maintenance
 
-Read [README.md](README.md) for the branch layout and release flow. Keep this checkout on `main`. Work on application branches in `.worktrees/`.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the branch layout and release flow. Keep this checkout on `main`. Work on application branches in `.worktrees/`.
 
 Sync owns `upstream/main` and `dev/main`. Nightly owns releases and the `update-feed` release. Change project files on `main` when Gerard requests them. During scheduled maintenance, push bare branches listed in `branches.txt` with `--force-with-lease`.
 
