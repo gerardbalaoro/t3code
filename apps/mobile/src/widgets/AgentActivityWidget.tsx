@@ -115,9 +115,9 @@ export function AgentActivityWidget(
   // and tint it through a container the resizable image fills.
   const renderLogo = (height: number) => (
     <HStack
-      modifiers={[frame({ width: height * 1.5, height }), foregroundStyle(primaryForeground)]}
+      modifiers={[frame({ width: height * 0.8, height }), foregroundStyle(primaryForeground)]}
     >
-      <Image assetName="T3Mark" modifiers={[resizable()]} />
+      <Image assetName="GCodeMark" modifiers={[resizable()]} />
     </HStack>
   );
 
