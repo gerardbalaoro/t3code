@@ -17,10 +17,11 @@ import { Input } from "~/components/ui/input";
 import { projectEnvironment } from "~/state/projects";
 import { useAtomCommand } from "~/state/use-atom-command";
 
-export function CreateFileDialog({
+export function CreateEntryDialog({
   environmentId,
   cwd,
   directory,
+  kind,
   canCreate,
   onClose,
   onCreated,
@@ -28,23 +29,31 @@ export function CreateFileDialog({
   environmentId: EnvironmentId;
   cwd: string;
   directory: string;
+  kind: "file" | "directory";
   canCreate: boolean;
   onClose: () => void;
   onCreated: (relativePath: string) => void;
 }) {
-  const [filePath, setFilePath] = useState(directory ? `${directory}/` : "");
+  const [entryPath, setEntryPath] = useState(directory ? `${directory}/` : "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const gt = useGT();
   const inputId = useId();
-  const createFile = useAtomCommand(projectEnvironment.createFile, { reportFailure: false });
+  const isFolder = kind === "directory";
+  const createEntry = useAtomCommand(
+    isFolder ? projectEnvironment.createDirectory : projectEnvironment.createFile,
+    { reportFailure: false },
+  );
+  const relativePath = entryPath.trim();
+  const canSubmit =
+    canCreate && relativePath !== "" && (!directory || relativePath !== `${directory}/`);
   const submit = async () => {
-    if (pending || !canCreate || !filePath.trim()) return;
+    if (pending || !canSubmit) return;
     setPending(true);
     setError(null);
-    const result = await createFile({
+    const result = await createEntry({
       environmentId,
-      input: { cwd, relativePath: filePath.trim() },
+      input: { cwd, relativePath },
     });
     setPending(false);
     if (result._tag === "Success") {
@@ -52,7 +61,13 @@ export function CreateFileDialog({
       onClose();
     } else if (result._tag === "Failure") {
       const cause = Cause.squash(result.cause);
-      setError(cause instanceof Error ? cause.message : gt("Could not create file. Try again."));
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : isFolder
+            ? gt("Could not create folder. Try again.")
+            : gt("Could not create file. Try again."),
+      );
     }
   };
   return (
@@ -71,9 +86,7 @@ export function CreateFileDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              <T>New file</T>
-            </DialogTitle>
+            <DialogTitle>{isFolder ? <T>New folder</T> : <T>New file</T>}</DialogTitle>
             <DialogDescription>
               <T>
                 Enter a path relative to <Var>{cwd}</Var>. Missing folders will be created.
@@ -83,17 +96,17 @@ export function CreateFileDialog({
           <DialogPanel>
             <label htmlFor={inputId} className="grid gap-1.5">
               <span className="text-xs font-medium text-foreground">
-                <T>File path</T>
+                {isFolder ? <T>Folder path</T> : <T>File path</T>}
               </span>
               <Input
                 id={inputId}
                 autoFocus
-                value={filePath}
+                value={entryPath}
                 spellCheck={false}
-                placeholder="src/example.ts"
+                placeholder={isFolder ? "src/example" : "src/example.ts"}
                 disabled={pending}
                 onChange={(event) => {
-                  setFilePath(event.target.value);
+                  setEntryPath(event.target.value);
                   setError(null);
                 }}
               />
@@ -105,7 +118,11 @@ export function CreateFileDialog({
             ) : null}
             {!canCreate ? (
               <p role="alert" className="mt-2 text-xs text-destructive">
-                <T>File creation is unavailable on this connection.</T>
+                {isFolder ? (
+                  <T>Folder creation is unavailable on this connection.</T>
+                ) : (
+                  <T>File creation is unavailable on this connection.</T>
+                )}
               </p>
             ) : null}
           </DialogPanel>
@@ -113,7 +130,7 @@ export function CreateFileDialog({
             <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onClose}>
               <T>Cancel</T>
             </Button>
-            <Button type="submit" size="sm" disabled={pending || !canCreate || !filePath.trim()}>
+            <Button type="submit" size="sm" disabled={pending || !canSubmit}>
               {pending ? <T>Creating…</T> : <T>Create</T>}
             </Button>
           </DialogFooter>

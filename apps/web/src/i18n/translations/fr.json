@@ -13093,5 +13093,9 @@
   "9b20df3e21a3d401": "Renommer",
   "aba29e77e52bca46": "Supprimer",
   "cb47b5907e24179f": "Nouveau fichier",
-  "da49b8271b9dffa0": "Supprimer"
+  "da49b8271b9dffa0": "Supprimer",
+  "a85651f4c6c5e449": "Impossible de créer le dossier. Réessayez.",
+  "052cfecdebf6081d": "Nouveau dossier",
+  "5b3b63d0c9d04238": "Cette connexion ne permet pas de créer des dossiers.",
+  "117072c3108e16ff": "Nouveau dossier"
 }

@@ -170,13 +170,13 @@ File links point to the file on the environment's machine, so moving or deleting
 
 ## Create, rename, and delete workspace files
 
-On web and desktop, right-click empty space in **Files** and select **New file**.
-To start in a folder, right-click the folder and select **New file**.
-Enter a workspace-relative path, such as `src/example.ts`.
-T3 Code creates missing parent folders and opens the new file in the editor.
+On web and desktop, right-click empty space in **Files** and select **New file** or **New folder**.
+To start inside an existing folder, right-click that folder.
+Enter a workspace-relative path, such as `src/example.ts` or `src/examples`.
+T3 Code creates missing parent folders and opens new files in the editor.
 Existing files remain unchanged.
 
-File creation requires filesystem write permission and a server that supports this feature.
+Creating files or folders requires filesystem write permission and a server that supports the action.
 Files outside the workspace remain read-only.
 
 Right-click a file or folder in **Files** to rename or permanently delete it. Rename accepts a workspace-relative path and creates missing destination folders. It never replaces an existing entry. Deleting a folder also deletes its contents. Save pending edits before changing the open file or its folder. These actions require filesystem write permission and a server that supports them.
