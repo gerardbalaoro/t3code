@@ -731,6 +731,30 @@ function projectFileFailureContext(
   }
 }
 
+function projectCreateFailure(
+  input: Pick<ProjectCreateFileError, "cwd" | "relativePath">,
+  cause:
+    | WorkspaceFileSystem.WorkspaceFileCreationError
+    | WorkspaceFileSystem.WorkspaceFileSystemError
+    | WorkspacePaths.WorkspacePathOutsideRootError
+    | KnownWorkspaces.UnknownWorkspaceError,
+) {
+  return new ProjectCreateFileError({
+    ...input,
+    reason:
+      cause._tag === "WorkspaceFileCreationError"
+        ? cause.reason
+        : cause._tag === "UnknownWorkspaceError"
+          ? "unknown_workspace"
+          : cause._tag === "WorkspacePathOutsideRootError" ||
+              cause._tag === "WorkspaceFilePathEscapeError"
+            ? "invalid_path"
+            : "operation_failed",
+    message: cause.message,
+    cause,
+  });
+}
+
 const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
@@ -1965,6 +1989,7 @@ export const layerWsRpc = (
           threadLinkMetadata: true,
           shellOlderSettled: true,
           workspaceFileCreation: true,
+          workspaceDirectoryCreation: true,
           workspaceEntryMutations: true,
           threadResumeCompletionMarker: true,
           threadSnapshotPagination: true,
@@ -3204,25 +3229,13 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.projectsCreateFile]: (input) =>
-          workspaceFileSystem.createFile(input).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ProjectCreateFileError({
-                  ...input,
-                  reason:
-                    cause._tag === "WorkspaceFileCreationError"
-                      ? cause.reason
-                      : cause._tag === "UnknownWorkspaceError"
-                        ? "unknown_workspace"
-                        : cause._tag === "WorkspacePathOutsideRootError" ||
-                            cause._tag === "WorkspaceFilePathEscapeError"
-                          ? "invalid_path"
-                          : "operation_failed",
-                  message: cause.message,
-                  cause,
-                }),
-            ),
-          ),
+          workspaceFileSystem
+            .createFile(input)
+            .pipe(Effect.mapError((cause) => projectCreateFailure(input, cause))),
+        [WS_METHODS.projectsCreateDirectory]: (input) =>
+          workspaceFileSystem
+            .createDirectory(input)
+            .pipe(Effect.mapError((cause) => projectCreateFailure(input, cause))),
         [WS_METHODS.projectsWriteFile]: (input) =>
           workspaceFileSystem.writeFile(input).pipe(
             Effect.mapError(
