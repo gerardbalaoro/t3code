@@ -55,7 +55,7 @@ import { SharedTooltipTrigger } from "~/components/ui/shared-tooltip";
 import { projectEnvironment } from "~/state/projects";
 import { serverEnvironment } from "~/state/server";
 import { EntryMutationDialog } from "./EntryMutationDialog";
-import { CreateFileDialog } from "./CreateFileDialog";
+import { CreateEntryDialog } from "./CreateEntryDialog";
 
 interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
@@ -199,7 +199,12 @@ export default function FileBrowserPanel({
   const downloadFile = useFileDownload(environmentId);
   const canWrite = useAtomValue(projectEnvironment.createFile.permissionAtom(environmentId));
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const canCreate = !hostFolder && canWrite && serverConfig?.workspaceFileCreation === true;
+  const canCreateFile = !hostFolder && canWrite && serverConfig?.workspaceFileCreation === true;
+  const canMakeDirectory = useAtomValue(
+    projectEnvironment.createDirectory.permissionAtom(environmentId),
+  );
+  const canCreateFolder =
+    !hostFolder && canMakeDirectory && serverConfig?.workspaceDirectoryCreation === true;
   const canRename = useAtomValue(projectEnvironment.renameEntry.permissionAtom(environmentId));
   const canDelete = useAtomValue(projectEnvironment.deleteEntry.permissionAtom(environmentId));
   const canMutate =
@@ -209,8 +214,14 @@ export default function FileBrowserPanel({
     operation: "rename" | "delete";
     folder: boolean;
   } | null>(null);
-  const [createDirectory, setCreateDirectory] = useState<string | null>(null);
-  const newFileMenuItem = { id: "new-file", label: gt("New file") };
+  const [creation, setCreation] = useState<{
+    directory: string;
+    kind: "file" | "directory";
+  } | null>(null);
+  const creationItems = [
+    ...(canCreateFile ? [{ id: "new-file" as const, label: gt("New file") }] : []),
+    ...(canCreateFolder ? [{ id: "new-folder" as const, label: gt("New folder") }] : []),
+  ];
   const {
     entries: directoryEntries,
     load,
@@ -275,7 +286,7 @@ export default function FileBrowserPanel({
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
           [
-            ...(canCreate && entryKinds.get(relativePath) === "directory" ? [newFileMenuItem] : []),
+            ...(entryKinds.get(relativePath) === "directory" ? creationItems : []),
             ...(canMutate
               ? [
                   { id: "rename-entry", label: gt("Rename") },
@@ -294,8 +305,11 @@ export default function FileBrowserPanel({
           pointerIsFresh ? pointer.source : undefined,
         );
         if (clicked === null) return;
-        if (clicked === "new-file") {
-          setCreateDirectory(relativePath);
+        if (clicked === "new-file" || clicked === "new-folder") {
+          setCreation({
+            directory: relativePath,
+            kind: clicked === "new-folder" ? "directory" : "file",
+          });
           return;
         }
         if (clicked === "rename-entry" || clicked === "delete-entry") {
@@ -357,17 +371,18 @@ export default function FileBrowserPanel({
 
   const showBackgroundContextMenu = useStableCallback(async (event: MouseEvent) => {
     // Tree rows handle the menu first and prevent the browser default.
-    if (event.defaultPrevented || !canCreate) return;
+    if (event.defaultPrevented || creationItems.length === 0) return;
     const api = readLocalApi();
     if (!api) return;
 
     event.preventDefault();
     const clicked = await api.contextMenu.show(
-      [newFileMenuItem],
+      creationItems,
       { x: event.clientX, y: event.clientY },
       contextMenuSourceOf(event),
     );
-    if (clicked === newFileMenuItem.id) setCreateDirectory("");
+    if (clicked)
+      setCreation({ directory: "", kind: clicked === "new-folder" ? "directory" : "file" });
   });
 
   const loadingDirectoriesRef = useRef(loadingDirectories);
@@ -785,20 +800,27 @@ export default function FileBrowserPanel({
           }}
         />
       ) : null}
-      {createDirectory !== null ? (
-        <CreateFileDialog
+      {creation ? (
+        <CreateEntryDialog
           environmentId={environmentId}
           cwd={cwd}
-          directory={createDirectory}
-          canCreate={canCreate}
-          onClose={() => setCreateDirectory(null)}
+          directory={creation.directory}
+          kind={creation.kind}
+          canCreate={creation.kind === "directory" ? canCreateFolder : canCreateFile}
+          onClose={() => setCreation(null)}
           onCreated={(relativePath) => {
             handleSearchValueChange("");
             refresh();
+            if (creation.kind === "directory") {
+              const segments = relativePath.split("/");
+              for (let i = 1; i < segments.length; i++) {
+                pendingExpandedPaths.add(`${segments.slice(0, i).join("/")}/`);
+              }
+            }
             void loadFileAncestors(relativePath, (directory) => load(directory, true), {
               signal: new AbortController().signal,
             });
-            onOpenFile(relativePath);
+            if (creation.kind === "file") onOpenFile(relativePath);
           }}
         />
       ) : null}
