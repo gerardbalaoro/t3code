@@ -2,11 +2,13 @@
 
 # G Code
 
-G Code gives your coding agents one workspace. Run Codex, Claude Code, and other supported agents with the accounts you already use.
+G Code is a fork of T3 Code, the open-source control plane for coding agents, with a few additions.
 
-- Organize agent threads by project and give each task its own Git worktree.
-- Review diffs, commit changes, and push from the app.
-- Create, rename, and delete files and folders from the workspace file browser.
+## Added Features
+
+- Create files from the workspace file browser. Missing parent folders are created automatically.
+- Rename or move files and folders.
+- Delete files and folders.
 
 ## Download
 
