@@ -12,6 +12,7 @@ import type {
   ProjectWriteFileResult,
   ProjectRenameEntryInput,
   ProjectDeleteEntryInput,
+  ProjectCreateDirectoryInput,
   ProjectCreateFileInput,
 } from "@t3tools/contracts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
@@ -150,6 +151,14 @@ export class WorkspaceEntryMutationError extends Schema.TaggedError<WorkspaceEnt
   },
 ) {}
 
+type WorkspaceCreationResult = Effect.Effect<
+  ProjectWriteFileResult,
+  | WorkspaceFileSystemError
+  | WorkspaceFileCreationError
+  | WorkspacePaths.WorkspacePathOutsideRootError
+  | KnownWorkspaces.UnknownWorkspaceError
+>;
+
 export class WorkspaceFileSystem extends Context.Service<
   WorkspaceFileSystem,
   {
@@ -190,15 +199,8 @@ export class WorkspaceFileSystem extends Context.Service<
       | WorkspacePaths.WorkspacePathOutsideRootError
       | KnownWorkspaces.UnknownWorkspaceError
     >;
-    readonly createFile: (
-      input: ProjectCreateFileInput,
-    ) => Effect.Effect<
-      ProjectWriteFileResult,
-      | WorkspaceFileSystemError
-      | WorkspaceFileCreationError
-      | WorkspacePaths.WorkspacePathOutsideRootError
-      | KnownWorkspaces.UnknownWorkspaceError
-    >;
+    readonly createFile: (input: ProjectCreateFileInput) => WorkspaceCreationResult;
+    readonly createDirectory: (input: ProjectCreateDirectoryInput) => WorkspaceCreationResult;
   }
 >()("t3/workspace/WorkspaceFileSystem") {}
 
@@ -719,44 +721,54 @@ export const make = Effect.gen(function* () {
     return { relativePath: target.relativePath };
   });
 
-  const createFile: WorkspaceFileSystem["Service"]["createFile"] = Effect.fn(
-    "WorkspaceFileSystem.createFile",
-  )(function* (input) {
-    yield* knownWorkspaces.assertContains(input.cwd);
-    const target = yield* resolveWriteTarget(input);
-    yield* fileSystem.makeDirectory(path.dirname(target.realTargetPath), { recursive: true }).pipe(
-      Effect.mapError(
-        (cause) =>
-          new WorkspaceFileCreationError({
+  const createEntry = (name: string, create: (targetPath: string) => Promise<void>) =>
+    Effect.fn(name)(function* (input: ProjectCreateFileInput) {
+      yield* knownWorkspaces.assertContains(input.cwd);
+      const target = yield* resolveWriteTarget(input);
+      yield* fileSystem
+        .makeDirectory(path.dirname(target.realTargetPath), { recursive: true })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new WorkspaceFileCreationError({
+                workspaceRoot: input.cwd,
+                relativePath: input.relativePath,
+                reason:
+                  cause.reason._tag === "PermissionDenied"
+                    ? "permission_denied"
+                    : "operation_failed",
+                cause,
+              }),
+          ),
+        );
+      yield* Effect.tryPromise({
+        try: () => create(target.realTargetPath),
+        catch: (cause) => {
+          const code = (cause as NodeJS.ErrnoException).code;
+          return new WorkspaceFileCreationError({
             workspaceRoot: input.cwd,
             relativePath: input.relativePath,
             reason:
-              cause.reason._tag === "PermissionDenied" ? "permission_denied" : "operation_failed",
+              code === "EEXIST"
+                ? "already_exists"
+                : code === "EACCES" || code === "EPERM"
+                  ? "permission_denied"
+                  : "operation_failed",
             cause,
-          }),
-      ),
-    );
-    yield* Effect.tryPromise({
-      // O_EXCL makes the existence check atomic with creation, including a competing writer.
-      try: () => NodeFSP.writeFile(target.realTargetPath, "", { flag: "wx" }),
-      catch: (cause) => {
-        const code = (cause as NodeJS.ErrnoException).code;
-        return new WorkspaceFileCreationError({
-          workspaceRoot: input.cwd,
-          relativePath: input.relativePath,
-          reason:
-            code === "EEXIST"
-              ? "already_exists"
-              : code === "EACCES" || code === "EPERM"
-                ? "permission_denied"
-                : "operation_failed",
-          cause,
-        });
-      },
+          });
+        },
+      });
+      yield* workspaceEntries.refresh(input.cwd);
+      return { relativePath: target.relativePath };
     });
-    yield* workspaceEntries.refresh(input.cwd);
-    return { relativePath: target.relativePath };
-  });
+
+  // Both operations fail if the target already exists, including when another writer wins the race.
+  const createFile = createEntry("WorkspaceFileSystem.createFile", (targetPath) =>
+    NodeFSP.writeFile(targetPath, "", { flag: "wx" }),
+  );
+  const createDirectory = createEntry("WorkspaceFileSystem.createDirectory", (targetPath) =>
+    NodeFSP.mkdir(targetPath),
+  );
 
   const entryIO = <A>(relativePath: string, operation: () => Promise<A>) =>
     Effect.tryPromise({
@@ -874,6 +886,7 @@ export const make = Effect.gen(function* () {
     readFile,
     writeFile,
     createFile,
+    createDirectory,
     renameEntry,
     deleteEntry,
   });

@@ -750,6 +750,45 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
     );
   });
 
+  describe("createDirectory", () => {
+    it.effect("lists the new empty folder and rejects an occupied path", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const entries = yield* WorkspaceEntries.WorkspaceEntries;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "existing.txt", "keep me");
+        yield* entries.list({ cwd, directoryPath: "" });
+        const relativePath = "new/nested";
+        expect(yield* service.createDirectory({ cwd, relativePath })).toEqual({ relativePath });
+        expect(yield* fs.readDirectory(path.join(cwd, relativePath))).toEqual([]);
+        expect((yield* entries.list({ cwd, directoryPath: "new" })).entries).toContainEqual(
+          expect.objectContaining({ path: relativePath, kind: "directory" }),
+        );
+        for (const occupied of ["new/nested", "existing.txt"]) {
+          expect(
+            yield* service.createDirectory({ cwd, relativePath: occupied }).pipe(Effect.flip),
+          ).toMatchObject({ reason: "already_exists" });
+        }
+        expect(yield* fs.readFileString(path.join(cwd, "existing.txt"))).toBe("keep me");
+      }),
+    );
+
+    it.effect("reports a collision when two requests create the same folder", () =>
+      Effect.gen(function* () {
+        const service = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        const create = service.createDirectory({ cwd, relativePath: "same" }).pipe(Effect.result);
+        const results = yield* Effect.all([create, create], { concurrency: "unbounded" });
+        expect(results.filter((result) => result._tag === "Success")).toHaveLength(1);
+        expect(results.find((result) => result._tag === "Failure")).toMatchObject({
+          failure: { reason: "already_exists" },
+        });
+      }),
+    );
+  });
+
   describe("entry mutations", () => {
     it.effect(
       "renames files, creates destination parents, allows case changes and refreshes entries",

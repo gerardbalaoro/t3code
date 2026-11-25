@@ -13205,5 +13205,9 @@
   "9b20df3e21a3d401": "Umbenennen",
   "aba29e77e52bca46": "Löschen",
   "cb47b5907e24179f": "Neue Datei",
-  "da49b8271b9dffa0": "Löschen"
+  "da49b8271b9dffa0": "Löschen",
+  "a85651f4c6c5e449": "Der Ordner konnte nicht erstellt werden. Versuche es erneut.",
+  "052cfecdebf6081d": "Neuer Ordner",
+  "5b3b63d0c9d04238": "Über diese Verbindung können keine Ordner erstellt werden.",
+  "117072c3108e16ff": "Neuer Ordner"
 }

@@ -25,6 +25,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.providerMcpSignInStart]: AuthProvidersManageScope,
   [WS_METHODS.providerMcpSignInComplete]: AuthProvidersManageScope,
   [WS_METHODS.projectsCreateFile]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectsCreateDirectory]: AuthFilesystemWriteScope,
   [WS_METHODS.projectsRenameEntry]: AuthFilesystemWriteScope,
   [WS_METHODS.projectsDeleteEntry]: AuthFilesystemWriteScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
