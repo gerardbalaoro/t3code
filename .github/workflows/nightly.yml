@@ -1,16 +1,16 @@
 name: Nightly
 
-# Builds and publishes one `dev` commit as a nightly release. Sync starts
-# it; it can also be run by hand with a `dev` commit.
+# Builds and publishes one `dev/patch` commit as a nightly release. Sync starts
+# it; it can also be run by hand with a `dev/patch` commit.
 #
-# Packaging is upstream's own release-desktop.yml, called from `dev`, so its
+# Packaging is upstream's own release-desktop.yml, called from `dev/patch`, so its
 # fixes arrive with every sync. The jobs around it mirror the parts of
 # upstream's release.yml that apply to a fork: version, JS bundle, publish.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "dev commit to build (full SHA)"
+        description: "dev/patch commit to build (full SHA)"
         required: true
         type: string
 
@@ -36,15 +36,16 @@ jobs:
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ steps.connect.outputs.relay_url }}
     steps:
-      - name: Check the commit is on dev
+      - name: Check the commit is on dev/patch
         env:
           GH_TOKEN: ${{ github.token }}
           REF: ${{ inputs.ref }}
         run: |
           [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$REF...dev" --jq .status)"
+          head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/dev/patch" --jq .object.sha)"
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$REF...$head" --jq .status)"
           [[ "$status" == "identical" || "$status" == "ahead" ]] ||
-            { echo "$REF is not on dev ($status)" >&2; exit 1; }
+            { echo "$REF is not on dev/patch ($status)" >&2; exit 1; }
 
       - uses: actions/checkout@v6
         with:
@@ -150,7 +151,7 @@ jobs:
   # Builds are unsigned. To sign, pass the signing secrets by name here.
   desktop_mac_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -172,7 +173,7 @@ jobs:
 
   desktop_linux_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -194,7 +195,7 @@ jobs:
 
   desktop_linux_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -215,7 +216,7 @@ jobs:
 
   desktop_win_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -237,7 +238,7 @@ jobs:
 
   desktop_win_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/patch
     with:
       version: ${{ needs.preflight.outputs.version }}
       ref: ${{ inputs.ref }}
@@ -337,23 +338,24 @@ jobs:
             rm -- "$primary" "$secondary"
           done
 
-      # dev is upstream's latest nightly plus the branches, so the fork point
-      # with upstream main is the nightly's commit.
+      # Find the upstream nightly used to assemble this build.
       - name: Write release notes
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
         run: |
-          upstream="$(git merge-base "$REF" origin/main)"
+          upstream="$(git merge-base "$REF" origin/upstream/main)"
           upstream_tag="$(git ls-remote --tags https://github.com/pingdotgg/t3code.git 'v*-nightly.*' |
             awk -v sha="$upstream" '$1 == sha { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' | sort -V | tail -n 1)"
           if [[ -n "$upstream_tag" ]]; then
-            echo "NAME=T3 Code Nightly $VERSION (upstream $upstream_tag)" >> "$GITHUB_ENV"
+            echo "NAME=G Code Nightly $VERSION (upstream $upstream_tag)" >> "$GITHUB_ENV"
             based="upstream [$upstream_tag](https://github.com/pingdotgg/t3code/releases/tag/$upstream_tag)"
           else
             based="upstream [\`${upstream:0:10}\`](https://github.com/pingdotgg/t3code/commit/$upstream), which is not an upstream nightly"
           fi
           {
-            echo "Based on $based, plus:"
+            echo "G Code is an unofficial fork of T3 Code. This build is based on $based."
+            echo
+            echo "Changes in this fork:"
             echo
             git log --reverse --format='- %s' "$upstream..$REF"
           } > notes.md

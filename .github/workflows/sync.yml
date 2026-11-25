@@ -1,13 +1,12 @@
 name: Sync
 
-# Keeps `main` equal to upstream, rebuilds `dev` on upstream's latest nightly
-# from branches.txt, and starts a nightly when upstream has published a new one.
+# Replays features and fork patches on the latest upstream nightly.
 on:
   schedule:
     - cron: "8,23,38,53 * * * *"
   push:
-    branches: [patch]
-    paths: [branches.txt, sync.sh]
+    branches: [main]
+    paths: [branches.txt, sync.sh, "patches/**", ".github/workflows/*.yml"]
   workflow_dispatch:
     inputs:
       nightly:
@@ -28,21 +27,34 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Check whether Nightly is using the build branches
+        id: active
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?per_page=100" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          echo "nightly=$count" >> "$GITHUB_OUTPUT"
+          if (( count > 0 )); then echo "A nightly is already running." >> "$GITHUB_STEP_SUMMARY"; fi
+
       # The default token cannot push commits that change workflow files, and
       # upstream's commits do. The app can, and only on this repository.
       - id: app
+        if: steps.active.outputs.nightly == '0'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v6
+        if: steps.active.outputs.nightly == '0'
         with:
-          path: patch
+          path: project
 
       - uses: actions/checkout@v6
+        if: steps.active.outputs.nightly == '0'
         with:
-          ref: main
+          ref: upstream/main
           path: work
           fetch-depth: 0
           filter: blob:none
@@ -53,31 +65,32 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - id: sync
+        if: steps.active.outputs.nightly == '0'
         working-directory: work
         env:
           SYNC_REPORT: ${{ runner.temp }}/sync-report.txt
         run: |
           git config user.name "${{ steps.app.outputs.app-slug }}[bot]"
           git config user.email "${{ steps.app.outputs.app-slug }}[bot]@users.noreply.github.com"
-          ../patch/sync.sh
+          ../project/sync.sh
 
       - name: Explain a blocked sync
         if: failure() && steps.sync.outcome == 'failure'
         run: |
           {
-            echo "## dev was not updated"
+            echo "## Build branches were not updated"
             echo
             echo '```'
             cat "$RUNNER_TEMP/sync-report.txt" 2>/dev/null || echo "See the sync step's log."
             echo '```'
             echo
-            echo "The previous dev and nightly are unchanged."
+            echo "The previous build branches and release are available."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Pushing upstream's commits registers upstream's workflows here. They
       # need upstream's runners and secrets, so they can only queue or fail.
       - name: Keep upstream's workflows off in this fork
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.active.outputs.nightly == '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -90,9 +103,10 @@ jobs:
             done
 
       - name: Start a nightly if due
+        if: steps.sync.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          DEV: ${{ steps.sync.outputs.dev }}
+          DEV: ${{ steps.sync.outputs.dev_patch }}
           UPSTREAM_NIGHTLY: ${{ steps.sync.outputs.upstream_nightly }}
           FORCE: ${{ inputs.nightly == true }}
         run: |
@@ -102,15 +116,15 @@ jobs:
           fi
           # Nightly names each release "... (upstream <tag>)".
           last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
-            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\."))][0] // empty | "\(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
           read -r last_ref last_upstream <<<"$last"
           if [[ "$last_ref" == "$DEV" ]]; then
-            echo "The latest nightly already has this dev."
+            echo "The latest nightly already contains this dev/patch commit."
             exit 0
           fi
           if [[ "$FORCE" != "true" && "$last_upstream" == "$UPSTREAM_NIGHTLY" ]]; then
             echo "The latest nightly is already on upstream $UPSTREAM_NIGHTLY. Branch changes ship with the next one."
             exit 0
           fi
-          gh workflow run nightly.yml --repo "$GITHUB_REPOSITORY" --ref patch -f ref="$DEV"
+          gh workflow run nightly.yml --repo "$GITHUB_REPOSITORY" --ref main -f ref="$DEV"
           echo "Started a nightly for $DEV." >> "$GITHUB_STEP_SUMMARY"
