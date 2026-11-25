@@ -1,0 +1,663 @@
+From 98f5b922fb22f5862389c83160dbd6b7923870bb Mon Sep 17 00:00:00 2001
+From: Gerard Balaoro <gerardbalaoro@gmail.com>
+Date: Wed, 25 Nov 2026 12:44:41 +0800
+Subject: [PATCH] feat(branding): use G Code icons on mobile
+
+Use the G mark for iOS and Android launchers, splashes, notifications, quick actions, widgets and live activities.
+---
+ apps/mobile/app.config.ts                     | 101 +++++-------------
+ .../assets/g-code/adaptive-foreground.png     | Bin 0 -> 1296 bytes
+ apps/mobile/assets/g-code/app-icon.png        | Bin 0 -> 7861 bytes
+ apps/mobile/assets/g-code/notification.png    | Bin 0 -> 304 bytes
+ apps/mobile/assets/g-code/splash.png          | Bin 0 -> 16874 bytes
+ apps/mobile/assets/widget/GCodeMark.svg       |   1 +
+ apps/mobile/assets/widget/T3Mark.svg          |   3 -
+ .../main/res/drawable/agent_activity_mark.xml |   8 +-
+ apps/mobile/plugins/withWidgetLogoAsset.cjs   |   4 +-
+ apps/mobile/src/widgets/AgentActivity.tsx     |   4 +-
+ .../src/widgets/AgentActivityWidget.tsx       |   4 +-
+ 11 files changed, 36 insertions(+), 89 deletions(-)
+ create mode 100644 apps/mobile/assets/g-code/adaptive-foreground.png
+ create mode 100644 apps/mobile/assets/g-code/app-icon.png
+ create mode 100644 apps/mobile/assets/g-code/notification.png
+ create mode 100644 apps/mobile/assets/g-code/splash.png
+ create mode 100644 apps/mobile/assets/widget/GCodeMark.svg
+ delete mode 100644 apps/mobile/assets/widget/T3Mark.svg
+
+diff --git a/apps/mobile/app.config.ts b/apps/mobile/app.config.ts
+index a868851d5c..5645249d7c 100644
+--- a/apps/mobile/app.config.ts
++++ b/apps/mobile/app.config.ts
+@@ -1,5 +1,4 @@
+ import type { ExpoConfig } from "expo/config";
+ 
+-import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
+ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+ 
+@@ -26,7 +25,4 @@ const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
+   : "https://observe.invalid";
+ 
+-const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
+-const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
+-
+ if (
+   isIosPersonalTeamBuild &&
+@@ -39,67 +35,32 @@ if (
+ }
+ 
+-const DEVELOPMENT_ASSETS = {
+-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
+-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
+-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
+-  androidAdaptiveForeground,
+-  androidAdaptiveBackgroundColor: "#347FF8",
+-  androidAdaptiveBackgroundImage: "./assets/android-icon-background-dev.png",
+-  androidSplashIcon: "./assets/android-splash-icon-dev.png",
+-  androidMonochromeIcon: "./assets/android-icon-mark.png",
+-  androidNotificationIcon: "./assets/android-notification-icon.png",
+-  androidNotificationColor: "#00639B",
+-} as const;
+-
+-const PREVIEW_ASSETS = {
+-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
+-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIconComposerProject),
+-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
+-  androidAdaptiveForeground,
+-  androidAdaptiveBackgroundColor: "#111533",
+-  androidAdaptiveBackgroundImage: "./assets/android-icon-background-nightly.png",
+-  androidSplashIcon: "./assets/android-splash-icon-nightly.png",
+-  androidMonochromeIcon: "./assets/android-icon-mark.png",
+-  androidNotificationIcon: "./assets/android-notification-icon.png",
+-  androidNotificationColor: "#7565C7",
+-} as const;
+-
+-const RELEASE_ASSETS = {
+-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIconComposerProject),
+-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
+-  androidAdaptiveForeground,
+-  androidAdaptiveBackgroundColor: "#000000",
+-  androidAdaptiveBackgroundImage: undefined,
+-  androidSplashIcon: "./assets/android-splash-icon-prod.png",
+-  androidMonochromeIcon: "./assets/android-icon-mark.png",
+-  androidNotificationIcon: "./assets/android-notification-icon.png",
+-  androidNotificationColor: "#FFFFFF",
++const appIcon = "./assets/g-code/app-icon.png";
++const splashIcon = "./assets/g-code/splash.png";
++const androidAdaptiveIcon = {
++  backgroundColor: "#F5F0E8",
++  foregroundImage: "./assets/g-code/adaptive-foreground.png",
+ } as const;
+ 
+ const VARIANT_CONFIG = {
+   development: {
+-    appName: "T3 Code Dev",
++    appName: "G Code Dev",
+     scheme: "t3code-dev",
+     iosBundleIdentifier: "com.t3tools.t3code.dev",
+     androidPackage: "com.t3tools.t3code.dev",
+     relyingParty: "clerk.t3.codes",
+-    assets: DEVELOPMENT_ASSETS,
+   },
+   preview: {
+-    appName: "T3 Code Preview",
++    appName: "G Code Preview",
+     scheme: "t3code-preview",
+     iosBundleIdentifier: "com.t3tools.t3code.preview",
+     androidPackage: "com.t3tools.t3code.preview",
+     relyingParty: "clerk.t3.codes",
+-    assets: PREVIEW_ASSETS,
+   },
+   production: {
+-    appName: "T3 Code",
++    appName: "G Code",
+     scheme: "t3code",
+     iosBundleIdentifier: "com.t3tools.t3code",
+     androidPackage: "com.t3tools.t3code",
+     relyingParty: "clerk.t3.codes",
+-    assets: RELEASE_ASSETS,
+   },
+ } as const;
+@@ -244,5 +205,5 @@ const config: ExpoConfig = {
+   },
+   orientation: "portrait",
+-  icon: variant.assets.appIcon,
++  icon: appIcon,
+   userInterfaceStyle: "automatic",
+   updates: {
+@@ -253,5 +214,5 @@ const config: ExpoConfig = {
+   },
+   ios: {
+-    icon: variant.assets.iosIcon,
++    icon: appIcon,
+     supportsTablet: true,
+     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
+@@ -277,8 +238,8 @@ const config: ExpoConfig = {
+       },
+       NSLocalNetworkUsageDescription:
+-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
++        "Allow G Code to connect to G Code servers on your local network or tailnet.",
+       // Built with the iOS 27 SDK, only view controllers can hide or style the status bar.
+       UIViewControllerBasedStatusBarAppearance: true,
+-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
++      NSPhotoLibraryAddUsageDescription: "Allow G Code to save images to your photo library.",
+       // System picture in picture needs background audio to start and survive outside the app.
+       UIBackgroundModes: ["audio"],
+@@ -298,5 +259,5 @@ const config: ExpoConfig = {
+   },
+   android: {
+-    icon: variant.assets.appIcon,
++    icon: appIcon,
+     package: variant.androidPackage,
+     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
+@@ -304,10 +265,6 @@ const config: ExpoConfig = {
+       : {}),
+     adaptiveIcon: {
+-      backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
+-      ...(variant.assets.androidAdaptiveBackgroundImage
+-        ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+-        : {}),
+-      foregroundImage: variant.assets.androidAdaptiveForeground,
+-      monochromeImage: variant.assets.androidMonochromeIcon,
++      ...androidAdaptiveIcon,
++      monochromeImage: androidAdaptiveIcon.foregroundImage,
+     },
+     // JS back dispatch needs RN's Android 16 shim and withAndroidPredictiveBackCompat on Android 13-15.
+@@ -325,5 +282,5 @@ const config: ExpoConfig = {
+   },
+   web: {
+-    favicon: variant.assets.appIcon,
++    favicon: appIcon,
+   },
+   plugins: [
+@@ -366,6 +323,6 @@ const config: ExpoConfig = {
+       "expo-notifications",
+       {
+-        icon: variant.assets.androidNotificationIcon,
+-        color: variant.assets.androidNotificationColor,
++        icon: "./assets/g-code/notification.png",
++        color: "#191919",
+         mode: APP_VARIANT === "development" ? "development" : "production",
+       },
+@@ -378,11 +335,5 @@ const config: ExpoConfig = {
+       {
+         androidIcons: {
+-          shortcut_icon: {
+-            foregroundImage: variant.assets.androidAdaptiveForeground,
+-            backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
+-            ...(variant.assets.androidAdaptiveBackgroundImage
+-              ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+-              : {}),
+-          },
++          shortcut_icon: androidAdaptiveIcon,
+         },
+       },
+@@ -391,5 +342,5 @@ const config: ExpoConfig = {
+       "expo-audio",
+       {
+-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
++        microphonePermission: "Allow G Code to use your microphone for voice input.",
+         recordAudioAndroid: true,
+         enableBackgroundPlayback: false,
+@@ -400,5 +351,5 @@ const config: ExpoConfig = {
+       "expo-camera",
+       {
+-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
++        cameraPermission: "Allow G Code to access your camera so you can scan pairing QR codes.",
+         microphonePermission: false,
+         barcodeScannerEnabled: true,
+@@ -411,5 +362,5 @@ const config: ExpoConfig = {
+         photosPermission: false,
+         // `false` makes this plugin add RECORD_AUDIO to blockedPermissions, breaking Android dictation.
+-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
++        microphonePermission: "Allow G Code to use your microphone for voice input.",
+       },
+     ],
+@@ -417,17 +368,17 @@ const config: ExpoConfig = {
+       "expo-splash-screen",
+       {
+-        image: variant.assets.splashIcon,
++        image: splashIcon,
+         resizeMode: "contain",
+         backgroundColor: "#ffffff",
+         imageWidth: 220,
+         dark: {
+-          image: variant.assets.splashIcon,
++          image: splashIcon,
+           backgroundColor: "#0a0a0a",
+         },
+         android: {
+           // Android 12+ masks the central two thirds of the 288dp canvas; adaptive layers avoid clipped corners.
+-          image: variant.assets.androidSplashIcon,
++          image: splashIcon,
+           imageWidth: 288,
+-          dark: { image: variant.assets.androidSplashIcon },
++          dark: { image: splashIcon },
+         },
+       },
+diff --git a/apps/mobile/assets/g-code/adaptive-foreground.png b/apps/mobile/assets/g-code/adaptive-foreground.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8bc64fd2ee5e8a242a65dfae38df023c8f637f12
+GIT binary patch
+literal 1296
+zcmeAS@N?(olHy`uVBq!ia0y~yVB7%09Bd2>3@7{yv=|szu6w#ThE&{od;MT8lcRvE
+z<F#8VYX2Xo^{6twVLp*17vlQC|L>LU(hNf${C_(`?m%^PcI;*8A92<B=3ViBefSv~
+z(m5m;Jek-WCN(flP)T4=;T%}*B}-d|xQ*ZKmYFjc*9^RK&_V^|I=h=uuV>v0*amXr
+zhkb+9jrV@fxc6cD)@!DF8RtD^W>)Y#z~CWdz%Yr0r$L2r;JN2sGJfa+yKctALFc-m
+b4<0PEo>MM3LvB-41IRO;u6{1-oD!M<=2hEM
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/mobile/assets/g-code/app-icon.png b/apps/mobile/assets/g-code/app-icon.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..19bb3e3b91a3bdf8568b359f7c3a750cfbc0654e
+GIT binary patch
+literal 7861
+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
+E6DK<49{>OV
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/mobile/assets/g-code/notification.png b/apps/mobile/assets/g-code/notification.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..c76ff8a32b08d525234c6320f025553add853ce1
+GIT binary patch
+literal 304
+zcmeAS@N?(olHy`uVBq!ia0y~yU`POA4mJh`hDS5XEf^RWzI(bjhE&{odpnS;K|#Rb
+zV9&eyRO=&7{F%=fCffZe{J4vOp<#dIW&SsN%lCF%ipt*7UcR?szp#RugHOW@21CXq
+zrXwsJoB}8U^M0`}`~GryF%vdPgz5-8{u!(8t5?VuSYR~<rt-~?$^&2Q_RUkbV8m`8
+tOrg$v_AB2%nyTY<918;j!;c%>$$A1SWR=6!7#J8BJYD@<);T3K0RT5rUJU>M
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/mobile/assets/g-code/splash.png b/apps/mobile/assets/g-code/splash.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..02c44caa42de00a4bf39844a83f863e7242f7331
+GIT binary patch
+literal 16874
+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
+KBb=YSfBipvW4`PF
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/mobile/assets/widget/GCodeMark.svg b/apps/mobile/assets/widget/GCodeMark.svg
+new file mode 100644
+index 0000000000..e4ac0a9cc4
+--- /dev/null
++++ b/apps/mobile/assets/widget/GCodeMark.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="27.428571428571427" height="34.285714285714285" viewBox="1 2 8 10"><g id="g" data-letter="g"><path fill="#191919" fill-rule="evenodd" d="M1 2L9 2L9 4L3 4L3 10L7 10L7 8L5 8L5 6L9 6L9 12L1 12Z"/></g></svg>
+diff --git a/apps/mobile/assets/widget/T3Mark.svg b/apps/mobile/assets/widget/T3Mark.svg
+deleted file mode 100644
+index 48d1b09446..0000000000
+--- a/apps/mobile/assets/widget/T3Mark.svg
++++ /dev/null
+@@ -1,3 +0,0 @@
+-<svg width="111" height="74" viewBox="7 29 111 74" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<path d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253 93.96C82.832 93.96 78.9653 93.4533 75.1253 92.44C71.2853 91.3733 68.032 89.88 65.3653 87.96L70.4053 78.04C72.5386 79.5867 75.0186 80.8133 77.8453 81.72C80.672 82.6267 83.5253 83.08 86.4053 83.08C89.6586 83.08 92.2186 82.44 94.0853 81.16C95.952 79.88 96.8853 78.12 96.8853 75.88C96.8853 73.7467 96.0586 72.0667 94.4053 70.84C92.752 69.6133 90.0853 69 86.4053 69H80.4853V60.44L96.0853 42.76L97.5253 47.4H68.1653V37H107.365V45.4L91.8453 63.08L85.2853 59.32H89.0453C95.9253 59.32 101.125 60.8667 104.645 63.96C108.165 67.0533 109.925 71.0267 109.925 75.88C109.925 79.0267 109.099 81.9867 107.445 84.76C105.792 87.48 103.259 89.6933 99.8453 91.4C96.432 93.1067 92.0586 93.96 86.7253 93.96Z" fill="black"/>
+-</svg>
+diff --git a/apps/mobile/modules/t3-agent-notifications/android/src/main/res/drawable/agent_activity_mark.xml b/apps/mobile/modules/t3-agent-notifications/android/src/main/res/drawable/agent_activity_mark.xml
+index 7aa01bac42..2daec47e9a 100644
+--- a/apps/mobile/modules/t3-agent-notifications/android/src/main/res/drawable/agent_activity_mark.xml
++++ b/apps/mobile/modules/t3-agent-notifications/android/src/main/res/drawable/agent_activity_mark.xml
+@@ -1,9 +1,7 @@
+-<!-- The T3 mark, full bleed, so it renders as large as other apps' status bar icons. -->
+ <vector xmlns:android="http://schemas.android.com/apk/res/android"
+     android:width="24dp" android:height="24dp"
+-    android:viewportWidth="120" android:viewportHeight="120">
+-    <group android:translateX="-2.5" android:translateY="-6">
+-        <path android:fillColor="#FFFFFFFF"
+-            android:pathData="M33.4509,93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253,93.96C82.832,93.96 78.9653,93.4533 75.1253,92.44C71.2853,91.3733 68.032,89.88 65.3653,87.96L70.4053,78.04C72.5386,79.5867 75.0186,80.8133 77.8453,81.72C80.672,82.6267 83.5253,83.08 86.4053,83.08C89.6586,83.08 92.2186,82.44 94.0853,81.16C95.952,79.88 96.8853,78.12 96.8853,75.88C96.8853,73.7467 96.0586,72.0667 94.4053,70.84C92.752,69.6133 90.0853,69 86.4053,69H80.4853V60.44L96.0853,42.76L97.5253,47.4H68.1653V37H107.365V45.4L91.8453,63.08L85.2853,59.32H89.0453C95.9253,59.32 101.125,60.8667 104.645,63.96C108.165,67.0533 109.925,71.0267 109.925,75.88C109.925,79.0267 109.099,81.9867 107.445,84.76C105.792,87.48 103.259,89.6933 99.8453,91.4C96.432,93.1067 92.0586,93.96 86.7253,93.96Z" />
++    android:viewportWidth="12" android:viewportHeight="12">
++    <group android:translateX="1" android:translateY="-1">
++        <path android:fillColor="#FFFFFFFF" android:pathData="M1 2L9 2L9 4L3 4L3 10L7 10L7 8L5 8L5 6L9 6L9 12L1 12Z" />
+     </group>
+ </vector>
+diff --git a/apps/mobile/plugins/withWidgetLogoAsset.cjs b/apps/mobile/plugins/withWidgetLogoAsset.cjs
+index d20d199119..f5eca25f60 100644
+--- a/apps/mobile/plugins/withWidgetLogoAsset.cjs
++++ b/apps/mobile/plugins/withWidgetLogoAsset.cjs
+@@ -10,6 +10,6 @@ const { addWidgetAssetCatalog } = require("./lib/addWidgetAssetCatalog.cjs");
+ const TARGET_NAME = "ExpoWidgetsTarget";
+ const CATALOG_NAME = "Assets.xcassets";
+-const IMAGE_SET = "T3Mark.imageset";
+-const SVG_NAME = "T3Mark.svg";
++const IMAGE_SET = "GCodeMark.imageset";
++const SVG_NAME = "GCodeMark.svg";
+ 
+ const CATALOG_CONTENTS = JSON.stringify({ info: { author: "expo", version: 1 } }, null, 2) + "\n";
+diff --git a/apps/mobile/src/widgets/AgentActivity.tsx b/apps/mobile/src/widgets/AgentActivity.tsx
+index 2def7e7e75..2f4c0de006 100644
+--- a/apps/mobile/src/widgets/AgentActivity.tsx
++++ b/apps/mobile/src/widgets/AgentActivity.tsx
+@@ -254,7 +254,7 @@ function AgentActivity(
+   const renderLogo = (height: number, color: Foreground, modifiers: typeof linkModifiers = []) => (
+     <HStack
+-      modifiers={[frame({ width: height * 1.5, height }), foregroundStyle(color), ...modifiers]}
++      modifiers={[frame({ width: height * 0.8, height }), foregroundStyle(color), ...modifiers]}
+     >
+-      <Image assetName="T3Mark" modifiers={[resizable()]} />
++      <Image assetName="GCodeMark" modifiers={[resizable()]} />
+     </HStack>
+   );
+diff --git a/apps/mobile/src/widgets/AgentActivityWidget.tsx b/apps/mobile/src/widgets/AgentActivityWidget.tsx
+index 8dff1156da..b3de01fb19 100644
+--- a/apps/mobile/src/widgets/AgentActivityWidget.tsx
++++ b/apps/mobile/src/widgets/AgentActivityWidget.tsx
+@@ -116,7 +116,7 @@ export function AgentActivityWidget(
+   const renderLogo = (height: number) => (
+     <HStack
+-      modifiers={[frame({ width: height * 1.5, height }), foregroundStyle(primaryForeground)]}
++      modifiers={[frame({ width: height * 0.8, height }), foregroundStyle(primaryForeground)]}
+     >
+-      <Image assetName="T3Mark" modifiers={[resizable()]} />
++      <Image assetName="GCodeMark" modifiers={[resizable()]} />
+     </HStack>
+   );
