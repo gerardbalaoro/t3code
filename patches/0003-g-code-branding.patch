@@ -1,4 +1,4 @@
-From 4290053391f33c2d6dd9d0b4050749879a605d02 Mon Sep 17 00:00:00 2001
+From 746d6093a49c53548dcfd1f8a004b3c1b0488f98 Mon Sep 17 00:00:00 2001
 From: Gerard Balaoro <gerardbalaoro@gmail.com>
 Date: Wed, 25 Nov 2026 12:19:35 +0800
 Subject: [PATCH] feat(branding): ship G Code with its own identity
@@ -44,13 +44,13 @@ Use the G mark in the app and on installers. Rename the release, application and
  assets/g-code/windows.ico                     | Bin 0 -> 372526 bytes
  scripts/build-desktop-artifact.ts             |  60 +++++++--------
  scripts/export-brand-icons.ts                 |  12 +--
- scripts/install.ps1                           |  24 +++---
- scripts/install.sh                            |  20 ++---
- scripts/install.test.ts                       |  12 +--
+ scripts/install.ps1                           |  26 +++----
+ scripts/install.sh                            |  22 +++---
+ scripts/install.test.ts                       |  20 ++---
  scripts/lib/brand-assets.ts                   |  70 +++---------------
  scripts/release-smoke.ts                      |   2 +-
  scripts/resolve-nightly-release.ts            |   2 +-
- 45 files changed, 178 insertions(+), 268 deletions(-)
+ 45 files changed, 184 insertions(+), 274 deletions(-)
  create mode 100644 apps/mobile/src/components/GCodeMark.tsx
  delete mode 100644 apps/mobile/src/components/T3Wordmark.tsx
  create mode 100644 apps/web/src/components/GCodeMark.tsx
@@ -26919,14 +26919,18 @@ index 052665b7c2..67ea39a6ac 100644
    if (checkOnly) {
      const stale = yield* Effect.filter(
 diff --git a/scripts/install.ps1 b/scripts/install.ps1
-index 9a9f61ef07..8bedf6c7b3 100644
+index 9a9f61ef07..ee99b94d33 100644
 --- a/scripts/install.ps1
 +++ b/scripts/install.ps1
-@@ -1,3 +1,3 @@
+@@ -1,6 +1,6 @@
 -# Installs the T3 Code CLI from a GitHub Release archive on Windows. Needs
 +# Installs the G Code CLI from a GitHub Release archive on Windows. Needs
  # only PowerShell 5.1+; no Node, npm, or compiler.
  #
+-#   irm https://t3.codes/install.ps1 | iex
++#   irm https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/patch/scripts/install.ps1 | iex
+ #
+ # Environment:
 @@ -121,14 +121,14 @@ if ($interactive) {
    # Block characters are constructed so this file also loads correctly in PowerShell 5.1.
    $mark = @(
@@ -26978,15 +26982,19 @@ index 9a9f61ef07..8bedf6c7b3 100644
    }
  }
 diff --git a/scripts/install.sh b/scripts/install.sh
-index cd09c69d47..201e3049d7 100755
+index cd09c69d47..2519ee8409 100755
 --- a/scripts/install.sh
 +++ b/scripts/install.sh
-@@ -1,4 +1,4 @@
+@@ -1,7 +1,7 @@
  #!/bin/sh
 -# Installs the T3 Code CLI from a GitHub Release archive. Needs only sh, tar,
 +# Installs the G Code CLI from a GitHub Release archive. Needs only sh, tar,
  # sha256sum or shasum, and curl or wget; no Node, npm, or compiler.
  #
+-#   curl -fsSL https://t3.codes/install.sh | sh
++#   curl -fsSL https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/patch/scripts/install.sh | sh
+ #
+ # Environment:
 @@ -55,9 +55,9 @@ step() {
  if "$interactive"; then
    printf '\n%s' "$bold" >&2
@@ -27031,7 +27039,7 @@ index cd09c69d47..201e3049d7 100755
      *)
        if [ -n "$path_command" ]; then
 diff --git a/scripts/install.test.ts b/scripts/install.test.ts
-index f123a9cc04..61103a26ee 100644
+index f123a9cc04..6ca1208c1c 100644
 --- a/scripts/install.test.ts
 +++ b/scripts/install.test.ts
 @@ -52,5 +52,5 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer home
@@ -27041,6 +27049,17 @@ index f123a9cc04..61103a26ee 100644
 +      expect(stderr).toContain(`Installed G Code ${version}`);
        expect(await NodeFSP.readFile(launcher, "utf8")).toBe(
          launcherScript(NodePath.join(target, "t3")),
+@@ -81,8 +81,8 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
+       const url = new URL(request.url ?? "/", "http://fixture");
+       const body =
+-        url.pathname === "/pingdotgg/t3code/releases/latest" &&
++        url.pathname === "/gerardbalaoro/t3code/releases/latest" &&
+         request.headers.accept === "application/json"
+           ? { tag_name: "v1.2.3" }
+-          : url.pathname === "/repos/pingdotgg/t3code/releases"
++          : url.pathname === "/repos/gerardbalaoro/t3code/releases"
+             ? { "1": nightlies, "2": [{ tag_name: `v${version}` }, { tag_name: "v1.2.3" }] }[
+                 url.searchParams.get("page") ?? ""
 @@ -129,5 +129,5 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
        );
        expect(code, output).toBe(0);
@@ -27048,6 +27067,19 @@ index f123a9cc04..61103a26ee 100644
 +      expect(output).toContain(`Installed G Code ${version}`);
      } finally {
        server.closeAllConnections();
+@@ -282,10 +282,10 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("install.sh t3
+       );
+ 
+-      // Containers and CI often have no SHELL; `set -u` must not stop the installer there.
++      // Containers and CI can have no login shell; `set -u` must not stop the installer there.
+       const noShell = await installOver({
+         script: "install.sh",
+         home,
+         binDir,
+-        env: { HOME: root, SHELL: undefined, PATH: "/usr/bin:/bin" },
++        env: { HOME: root, SHELL: "", PATH: "/usr/bin:/bin" },
+       });
+       expect(noShell.code, noShell.output).toBe(0);
 @@ -300,5 +300,5 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("install.sh t3
        });
        expect(slashed.code, slashed.output).toBe(0);
