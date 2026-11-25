@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { T, useGT } from "gt-react";
+import { T, Var, useGT } from "gt-react";
 import { useId, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -75,7 +75,9 @@ export function CreateFileDialog({
               <T>New file</T>
             </DialogTitle>
             <DialogDescription>
-              <T>Enter a path relative to {cwd}. Missing folders will be created.</T>
+              <T>
+                Enter a path relative to <Var>{cwd}</Var>. Missing folders will be created.
+              </T>
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>

@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { T, useGT } from "gt-react";
+import { T, Var, useGT } from "gt-react";
 import { useId, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -82,17 +82,27 @@ export function EntryMutationDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              <T>
-                {operation === "rename" ? "Rename" : "Delete"} {folder ? "folder" : "file"}
-              </T>
+              {operation === "rename"
+                ? folder
+                  ? gt("Rename folder")
+                  : gt("Rename file")
+                : folder
+                  ? gt("Delete folder")
+                  : gt("Delete file")}
             </DialogTitle>
             <DialogDescription>
               {operation === "rename" ? (
-                <T>Enter a path relative to {cwd}. Missing folders will be created.</T>
+                <T>
+                  Enter a path relative to <Var>{cwd}</Var>. Missing folders will be created.
+                </T>
+              ) : folder ? (
+                <T>
+                  Permanently delete “<Var>{relativePath}</Var>” and all its contents? This cannot
+                  be undone.
+                </T>
               ) : (
                 <T>
-                  Permanently delete “{relativePath}”{folder ? " and all its contents" : ""}? This
-                  cannot be undone.
+                  Permanently delete “<Var>{relativePath}</Var>”? This cannot be undone.
                 </T>
               )}
             </DialogDescription>

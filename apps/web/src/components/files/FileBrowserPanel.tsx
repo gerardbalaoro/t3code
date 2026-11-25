@@ -15,7 +15,7 @@ import * as Cause from "effect/Cause";
 import { T, useGT, useMessages } from "gt-react";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
-import { type Ref, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type MouseEvent, type Ref, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
@@ -213,6 +213,7 @@ export default function FileBrowserPanel({
     folder: boolean;
   } | null>(null);
   const [createDirectory, setCreateDirectory] = useState<string | null>(null);
+  const newFileMenuItem = { id: "new-file", label: gt("New file") };
   const {
     entries: directoryEntries,
     load,
@@ -282,13 +283,11 @@ export default function FileBrowserPanel({
         const clicked = await api.contextMenu.show(
           [
             ...(canOpenPreview ? [{ id: "open-preview", label: gt("Open preview") }] : []),
-            ...(canCreate && entryKinds.get(relativePath) === "directory"
-              ? [{ id: "new-file", label: gt("New file…") }]
-              : []),
+            ...(canCreate && entryKinds.get(relativePath) === "directory" ? [newFileMenuItem] : []),
             ...(canMutate
               ? [
-                  { id: "rename-entry", label: gt("Rename…") },
-                  { id: "delete-entry", label: gt("Delete…") },
+                  { id: "rename-entry", label: gt("Rename") },
+                  { id: "delete-entry", label: gt("Delete") },
                 ]
               : []),
             ...fileMenuItems,
@@ -367,6 +366,21 @@ export default function FileBrowserPanel({
       });
     },
   );
+
+  const showBackgroundContextMenu = useStableCallback(async (event: MouseEvent) => {
+    // Tree rows handle the menu first and prevent the browser default.
+    if (event.defaultPrevented || !canCreate) return;
+    const api = readLocalApi();
+    if (!api) return;
+
+    event.preventDefault();
+    const clicked = await api.contextMenu.show(
+      [newFileMenuItem],
+      { x: event.clientX, y: event.clientY },
+      contextMenuSourceOf(event),
+    );
+    if (clicked === newFileMenuItem.id) setCreateDirectory("");
+  });
 
   const loadingDirectoriesRef = useRef(loadingDirectories);
   const revalidateDirectory = useStableCallback(revalidate);
@@ -818,16 +832,19 @@ export default function FileBrowserPanel({
         </div>
       )}
       {hasNoSearchMatches ? (
-        ready && !isPending && !pathSearch.isPending && !error && !pathSearch.error ? (
-          <div role="status" className="px-3 py-4 text-xs text-muted-foreground">
-            <T>No matching files.</T>
-          </div>
-        ) : null
+        <div className="min-h-0 flex-1" onContextMenu={showBackgroundContextMenu}>
+          {ready && !isPending && !pathSearch.isPending && !error && !pathSearch.error ? (
+            <div role="status" className="px-3 py-4 text-xs text-muted-foreground">
+              <T>No matching files.</T>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <FileTree
           model={model}
           aria-label={gt("{projectName} files", { projectName })}
           className="min-h-0 flex-1 overflow-hidden"
+          onContextMenu={showBackgroundContextMenu}
           onClickCapture={(event) => {
             if (
               event.defaultPrevented ||
