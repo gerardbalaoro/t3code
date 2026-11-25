@@ -23,7 +23,7 @@ For local Sync checks and scheduled maintenance, see [AGENTS.md](AGENTS.md).
 1. [Sync](.github/workflows/sync.yml) selects the latest upstream nightly every 15 minutes. It replays [branches.txt](branches.txt) in order, with `dev/patch` last. It updates `upstream/main` and `dev/main` together.
 2. [Nightly](.github/workflows/nightly.yml) builds the assembled `dev/main` commit and publishes the release and update feed. The release title identifies the upstream nightly.
 
-G Code uses the upstream nightly's version for both the packaged binaries and the release tag. Each upstream nightly has one G Code release. If its tag is still available, run Sync and select **nightly** to request a build.
+G Code uses the upstream nightly’s version for both the packaged binaries and the release tag. To rebuild the current nightly and replace its release, run Sync and select **nightly**.
 
 If Sync reports a conflict, check the job summary for the branch and files that need attention.
 

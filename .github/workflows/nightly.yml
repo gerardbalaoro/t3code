@@ -78,11 +78,6 @@ jobs:
             echo "No upstream nightly version found for $upstream." >&2
             exit 1
           fi
-          existing="$(git ls-remote --refs --tags origin "refs/tags/$tag")"
-          if [[ -n "$existing" ]]; then
-            echo "G Code already has the release tag $tag." >&2
-            exit 1
-          fi
           {
             echo "upstream_commit=$upstream"
             echo "tag=$tag"
@@ -301,6 +296,7 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           filter: blob:none
+          token: ${{ steps.app.outputs.token }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -355,14 +351,28 @@ jobs:
       # Find the upstream nightly used to assemble this build.
       - name: Write release notes
         env:
+          GH_TOKEN: ${{ github.token }}
           UPSTREAM_COMMIT: ${{ needs.preflight.outputs.upstream_commit }}
         run: |
+          gh api "repos/pingdotgg/t3code/releases/tags/$TAG" --jq '.body // ""' > upstream-notes.md
+          grep -q '[^[:space:]]' upstream-notes.md ||
+            { echo "The upstream release has no notes for $TAG." >&2; exit 1; }
+          IFS= read -r first_line < upstream-notes.md
+          heading="**$TAG**"
           {
-            echo "G Code is an unofficial fork of T3 Code. This build is based on upstream [$TAG](https://github.com/pingdotgg/t3code/releases/tag/$TAG)."
-            echo
-            echo "Changes in this fork:"
+            echo "### G Code patches"
             echo
             git log --reverse --format='- %s' "$UPSTREAM_COMMIT..$REF"
+            printf '\n---\n\n'
+            if [[ "$first_line" == "$heading"* ]]; then
+              printf '### %s%s\n' "$TAG" "${first_line#"$heading"}"
+              tail -n +2 upstream-notes.md
+            elif [[ "$first_line" == "### $TAG"* ]]; then
+              cat upstream-notes.md
+            else
+              printf '### %s\n\n' "$TAG"
+              cat upstream-notes.md
+            fi
           } > notes.md
           cat notes.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -376,9 +386,25 @@ jobs:
         run: |
           shopt -s nullglob extglob
           files=(release-assets/*.{dmg,zip,AppImage,deb,exe,blockmap,tar.gz} release-assets/!(builder-debug).yml release-assets/SHA256SUMS)
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
-            --target "$REF" --title "$NAME" --notes-file notes.md "${files[@]}"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          if release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isImmutable)"; then
+            if jq -e '.isImmutable' <<< "$release" >/dev/null; then
+              echo "GitHub marked release $TAG immutable." >&2
+              exit 1
+            fi
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+              --target "$REF" --title "$NAME" --notes-file notes.md "${files[@]}"
+          fi
+
+          tag_ref="refs/tags/$TAG"
+          existing="$(git ls-remote --refs --tags origin "$tag_ref")"
+          existing_sha="${existing%%$'\t'*}"
+          if [[ "$existing_sha" != "$REF" ]]; then
+            git push "--force-with-lease=$tag_ref:$existing_sha" origin "${REF}:$tag_ref"
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --target "$REF" \
+            --title "$NAME" --notes-file notes.md --draft=false --latest
 
       # Desktop nightlies find their update through update-feed/nightly.json
       # (upstream's electron-updater patch), so point it at this release.

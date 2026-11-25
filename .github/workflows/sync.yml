@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       nightly:
-        description: "Build the current upstream nightly if its release tag is available"
+        description: "Build the current upstream nightly and replace its release if it exists"
         type: boolean
         default: false
 
@@ -123,7 +123,7 @@ jobs:
           last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
             --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.tag_name) \(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
           read -r last_tag last_ref last_upstream <<<"$last"
-          if [[ "$last_tag" == "$UPSTREAM_NIGHTLY" ]]; then
+          if [[ "$FORCE" != "true" && "$last_tag" == "$UPSTREAM_NIGHTLY" ]]; then
             echo "G Code already has a release for $UPSTREAM_NIGHTLY."
             exit 0
           fi
