@@ -13,19 +13,13 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Beta)";
+const APP_DISPLAY_NAME = isDevelopment ? "G Code (Dev)" : "G Code (Beta)";
 const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3code";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
 const LAUNCHER_VERSION = 20;
-const developmentMacIconPngPath = NodePath.join(
-  repoRoot,
-  "assets",
-  "dev",
-  "blueprint-macos-1024.png",
-);
-const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "black-macos-1024.png");
+const macIconPngPath = NodePath.join(repoRoot, "assets", "g-code", "icon-1024.png");
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
@@ -203,7 +197,7 @@ function registerMacLauncherBundle(appBundlePath) {
 // Bundle-internal paths are macOS paths whatever host builds them.
 function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
   return {
-    sourceIconPath: development ? developmentMacIconPngPath : productionMacIconPngPath,
+    sourceIconPath: macIconPngPath,
     generatedIconPath: NodePath.posix.join(
       runtimeDir,
       development ? "icon-dev.icns" : "icon-prod.icns",
@@ -268,8 +262,8 @@ function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "T3 Code captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "T3 Code reads project files you open in the desktop app.",
+      "G Code captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "G Code reads project files you open in the desktop app.",
   };
 }
 
