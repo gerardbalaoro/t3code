@@ -30,7 +30,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      name: ${{ steps.version.outputs.name }}
+      upstream_commit: ${{ steps.version.outputs.upstream_commit }}
       clerk_publishable_key: ${{ steps.connect.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ steps.connect.outputs.clerk_jwt_template }}
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
@@ -50,6 +50,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          filter: blob:none
           sparse-checkout: |
             /*
             !/.repos/
@@ -69,11 +71,23 @@ jobs:
 
       - id: version
         run: |
-          node scripts/resolve-nightly-release.ts \
-            --date "$(date -u +%Y%m%d)" \
-            --run-number "${{ github.run_number }}" \
-            --sha "${{ inputs.ref }}" \
-            --github-output
+          upstream="$(git merge-base HEAD origin/upstream/main)"
+          upstream_tags="$(git ls-remote --tags https://github.com/pingdotgg/t3code.git 'v*-nightly.*')"
+          tag="$(awk -v sha="$upstream" '$1 == sha { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' <<< "$upstream_tags" | sort -V | tail -n 1)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]; then
+            echo "No upstream nightly version found for $upstream." >&2
+            exit 1
+          fi
+          existing="$(git ls-remote --refs --tags origin "refs/tags/$tag")"
+          if [[ -n "$existing" ]]; then
+            echo "G Code already has the release tag $tag." >&2
+            exit 1
+          fi
+          {
+            echo "upstream_commit=$upstream"
+            echo "tag=$tag"
+            echo "version=${tag#v}"
+          } >> "$GITHUB_OUTPUT"
 
       # T3 Connect's public production values, as upstream ships them for forks.
       - id: connect
@@ -272,7 +286,7 @@ jobs:
     timeout-minutes: 30
     env:
       TAG: ${{ needs.preflight.outputs.tag }}
-      NAME: ${{ needs.preflight.outputs.name }}
+      NAME: G Code Nightly ${{ needs.preflight.outputs.version }} (upstream ${{ needs.preflight.outputs.tag }})
       REF: ${{ inputs.ref }}
     steps:
       # Publishing creates the tag on a commit that changes workflow files.
@@ -341,23 +355,14 @@ jobs:
       # Find the upstream nightly used to assemble this build.
       - name: Write release notes
         env:
-          VERSION: ${{ needs.preflight.outputs.version }}
+          UPSTREAM_COMMIT: ${{ needs.preflight.outputs.upstream_commit }}
         run: |
-          upstream="$(git merge-base "$REF" origin/upstream/main)"
-          upstream_tag="$(git ls-remote --tags https://github.com/pingdotgg/t3code.git 'v*-nightly.*' |
-            awk -v sha="$upstream" '$1 == sha { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' | sort -V | tail -n 1)"
-          if [[ -n "$upstream_tag" ]]; then
-            echo "NAME=G Code Nightly $VERSION (upstream $upstream_tag)" >> "$GITHUB_ENV"
-            based="upstream [$upstream_tag](https://github.com/pingdotgg/t3code/releases/tag/$upstream_tag)"
-          else
-            based="upstream [\`${upstream:0:10}\`](https://github.com/pingdotgg/t3code/commit/$upstream), which is not an upstream nightly"
-          fi
           {
-            echo "G Code is an unofficial fork of T3 Code. This build is based on $based."
+            echo "G Code is an unofficial fork of T3 Code. This build is based on upstream [$TAG](https://github.com/pingdotgg/t3code/releases/tag/$TAG)."
             echo
             echo "Changes in this fork:"
             echo
-            git log --reverse --format='- %s' "$upstream..$REF"
+            git log --reverse --format='- %s' "$UPSTREAM_COMMIT..$REF"
           } > notes.md
           cat notes.md >> "$GITHUB_STEP_SUMMARY"
 

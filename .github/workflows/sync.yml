@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       nightly:
-        description: "Start a nightly even if upstream has not published a new one"
+        description: "Build the current upstream nightly if its release tag is available"
         type: boolean
         default: false
 
@@ -121,9 +121,13 @@ jobs:
           fi
           # Nightly names each release "... (upstream <tag>)".
           last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
-            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
-          read -r last_ref last_upstream <<<"$last"
-          if [[ "$last_ref" == "$DEV" ]]; then
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.tag_name) \(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
+          read -r last_tag last_ref last_upstream <<<"$last"
+          if [[ "$last_tag" == "$UPSTREAM_NIGHTLY" ]]; then
+            echo "G Code already has a release for $UPSTREAM_NIGHTLY."
+            exit 0
+          fi
+          if [[ "$FORCE" != "true" && "$last_ref" == "$DEV" ]]; then
             echo "The latest nightly already contains this dev/main commit."
             exit 0
           fi
