@@ -13029,5 +13029,9 @@
   "9b20df3e21a3d401": "Renomear",
   "aba29e77e52bca46": "Excluir",
   "cb47b5907e24179f": "Novo arquivo",
-  "da49b8271b9dffa0": "Excluir"
+  "da49b8271b9dffa0": "Excluir",
+  "a85651f4c6c5e449": "Não foi possível criar a pasta. Tente novamente.",
+  "052cfecdebf6081d": "Nova pasta",
+  "5b3b63d0c9d04238": "Esta conexão não permite criar pastas.",
+  "117072c3108e16ff": "Nova pasta"
 }

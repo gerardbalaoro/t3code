@@ -13038,5 +13038,9 @@
   "9b20df3e21a3d401": "Rename",
   "aba29e77e52bca46": "Delete",
   "cb47b5907e24179f": "New file",
-  "da49b8271b9dffa0": "Delete"
+  "da49b8271b9dffa0": "Delete",
+  "a85651f4c6c5e449": "Could not create folder. Try again.",
+  "052cfecdebf6081d": "New folder",
+  "5b3b63d0c9d04238": "Folder creation is unavailable on this connection.",
+  "117072c3108e16ff": "New folder"
 }

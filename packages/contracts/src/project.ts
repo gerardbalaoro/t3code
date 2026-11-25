@@ -569,6 +569,9 @@ export const ProjectCreateFileInput = Schema.Struct({
 });
 export type ProjectCreateFileInput = typeof ProjectCreateFileInput.Type;
 
+export const ProjectCreateDirectoryInput = ProjectCreateFileInput;
+export type ProjectCreateDirectoryInput = typeof ProjectCreateDirectoryInput.Type;
+
 export class ProjectCreateFileError extends Schema.TaggedError<ProjectCreateFileError>()(
   "ProjectCreateFileError",
   {

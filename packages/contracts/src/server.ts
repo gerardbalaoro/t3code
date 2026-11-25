@@ -740,6 +740,7 @@ export const ServerConfig = Schema.Struct({
    */
   shellOlderSettled: Schema.optionalKey(Schema.Boolean),
   workspaceFileCreation: Schema.optionalKey(Schema.Boolean),
+  workspaceDirectoryCreation: Schema.optionalKey(Schema.Boolean),
   workspaceEntryMutations: Schema.optionalKey(Schema.Boolean),
   shellRevealInFileManager: Schema.optionalKey(Schema.Boolean),
   shellRevealInFileManagerKind: Schema.optionalKey(FileManagerRevealKind),
