@@ -255,7 +255,7 @@ function AgentActivity(
     <HStack
       modifiers={[frame({ width: height * 0.8, height }), foregroundStyle(color), ...modifiers]}
     >
-      <Image assetName="GCodeMark" modifiers={[resizable()]} />
+      <Image assetName="T3Mark" modifiers={[resizable()]} />
     </HStack>
   );
 
