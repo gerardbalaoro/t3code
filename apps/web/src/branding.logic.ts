@@ -34,8 +34,8 @@ export function resolveServerBackedAppStageLabel(input: {
 }): string {
   return input.primaryServerVersion &&
     NIGHTLY_SERVER_VERSION_PATTERN.test(input.primaryServerVersion)
-    ? // oxlint-disable-next-line t3code/no-untranslated-copy -- fork branding
-      "Gerard"
+    ? // oxlint-disable-next-line t3code/no-untranslated-copy -- release channel name, part of the product name
+      "Nightly"
     : input.fallbackStageLabel;
 }
 

@@ -36,7 +36,12 @@ import { createModelSelection, pickModelSelection } from "@t3tools/shared/model"
 import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import {
+  APP_BASE_NAME,
+  APP_VERSION,
+  HOSTED_APP_CHANNEL,
+  HOSTED_APP_CHANNEL_LABEL,
+} from "../../branding";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
@@ -2537,6 +2542,7 @@ export function AboutSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={gt("App")}>
+        <SettingsRow title={APP_BASE_NAME} description={gt("An unofficial fork of T3 Code.")} />
         {primaryPolicy ? (
           <SettingsRow
             title={gt("Organization")}
@@ -2590,7 +2596,7 @@ export function AboutSettingsPanel() {
           description={
             telemetryOff === undefined
               ? gt(
-                  "How we handle your data, including the pseudonymous product usage data T3 Code collects.",
+                  "How we handle your data, including the pseudonymous product usage data G Code collects.",
                 )
               : gt("How we handle your data. {telemetryOff}", { telemetryOff })
           }
@@ -2606,7 +2612,7 @@ export function AboutSettingsPanel() {
         />
         <SettingsRow
           {...setting("open-source-licenses")}
-          description={gt("Notices for dependencies, assets, and optional tools used by T3 Code.")}
+          description={gt("Notices for dependencies, assets, and optional tools used by G Code.")}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}
