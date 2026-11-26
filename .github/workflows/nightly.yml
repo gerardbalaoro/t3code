@@ -146,6 +146,15 @@ jobs:
       - name: Build JS bundle
         run: vp run ${{ steps.bundle_build.outputs.script }}
 
+      # Packaging restores this hidden file from the visible copy in the artifact.
+      - name: Stage web asset manifest
+        shell: bash
+        run: |
+          manifest=apps/server/dist/client/.vite/manifest.json
+          if [[ -f "$manifest" ]]; then
+            cp "$manifest" apps/server/dist/client/vite-manifest.release.json
+          fi
+
       # The artifact root is apps/; packaging jobs download it into apps/.
       - uses: actions/upload-artifact@v7
         with:
