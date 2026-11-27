@@ -12985,5 +12985,15 @@
   "201490988858b511": "zurückgezogen von {by}",
   "99451a5d2d40440f": "Zurückgezogen von {by}.",
   "3ee30a50b70fffab": "Zurückgezogen von {by}: {reason}",
-  "92e129bf413a1220": "zurückgezogen"
+  "92e129bf413a1220": "zurückgezogen",
+  "d8f52f760b939906": "Thread, pinned",
+  "0da6f34a61127fea": "Close panel",
+  "3aa83002bc6cb7da": "Close panel ({shortcut})",
+  "dcd60ea27c45ad19": "Tabs",
+  "123b4d5eee980da0": "Sidebar",
+  "0cc16282c94e79d3": "Open views such as the browser, terminal, files, and diff beside the thread, or as full-width tabs in it.",
+  "14ad9c61ee8cae71": "Reset open views as to default",
+  "1f8b994a1626fe16": "Open views as",
+  "c05b9921c6c46f7f": "Sidebar (default)",
+  "b8ec913b190e168f": "tabs sidebar panel surfaces browser terminal files diff layout open full width"
 }

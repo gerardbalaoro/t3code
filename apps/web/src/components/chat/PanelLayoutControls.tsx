@@ -1,5 +1,6 @@
 import {
   PanelBottomIcon,
+  PanelRightCloseIcon,
   PanelRightIcon,
   SquareMenuIcon,
   Maximize2Icon,
@@ -11,6 +12,7 @@ import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
 import { cn } from "~/lib/utils";
 
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
+import { Button } from "../ui/button";
 import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
 import { useMobileSidebarSheetMounted } from "../ui/sidebar";
 import { Toggle } from "../ui/toggle";
@@ -37,6 +39,10 @@ export interface PanelLayoutControlsProps {
   onToggleTerminal: () => void;
   onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
+  /** Replaces the terminal and right panel toggles with one control that opens any surface. */
+  surfaceLauncher?: ReactNode;
+  /** With `surfaceLauncher`, closes the open right panel that its toggle used to close. */
+  onCloseRightPanel?: () => void;
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
@@ -57,6 +63,8 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   onToggleTerminal,
   onToggleThreadPanel,
   onToggleRightPanel,
+  surfaceLauncher,
+  onCloseRightPanel,
 }: PanelLayoutControlsProps) {
   const gt = useGT();
   const threadPanelToggle = (
@@ -94,7 +102,14 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       data-panel-layout-controls
     >
       {showThreadPanelControl ? threadPanelControl : null}
-      {showTerminalControl ? (
+      {surfaceLauncher}
+      {surfaceLauncher && onCloseRightPanel ? (
+        <RightPanelCloseControl
+          shortcutLabel={rightPanelShortcutLabel}
+          onClose={onCloseRightPanel}
+        />
+      ) : null}
+      {showTerminalControl && !surfaceLauncher ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
             <Toggle
@@ -118,7 +133,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
           </TooltipPopup>
         </Tooltip>
       ) : null}
-      {showRightPanelControl ? (
+      {showRightPanelControl && !surfaceLauncher ? (
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
             <Toggle
@@ -181,8 +196,46 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
   );
 });
 
+/** Hides the sidebar layout's right panel, whose header toggle the surface launcher replaced. */
+const RightPanelCloseControl = memo(function RightPanelCloseControl({
+  shortcutLabel,
+  onClose,
+}: {
+  shortcutLabel: string | null;
+  onClose: () => void;
+}) {
+  const gt = useGT();
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            className="shrink-0 [-webkit-app-region:no-drag]"
+            aria-label={gt("Close panel")}
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+          />
+        }
+      >
+        <PanelRightCloseIcon className="size-4" />
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">
+        {shortcutLabel
+          ? gt("Close panel ({shortcut})", { shortcut: shortcutLabel })
+          : gt("Close panel")}
+      </TooltipPopup>
+    </Tooltip>
+  );
+});
+
 /** The thread panel toggle on a header whose right side the inline right panel covers. */
 export function ThreadPanelHeaderControl(props: PanelLayoutControlsProps) {
+  const {
+    surfaceLauncher: _surfaceLauncher,
+    onCloseRightPanel: _onCloseRightPanel,
+    ...rest
+  } = props;
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
   return (
     <div
@@ -192,7 +245,7 @@ export function ThreadPanelHeaderControl(props: PanelLayoutControlsProps) {
       )}
       data-workspace-titlebar-controls
     >
-      <PanelLayoutControls {...props} showTerminalControl={false} showRightPanelControl={false} />
+      <PanelLayoutControls {...rest} showTerminalControl={false} showRightPanelControl={false} />
     </div>
   );
 }

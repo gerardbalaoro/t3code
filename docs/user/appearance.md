@@ -29,6 +29,24 @@ The controls retreat as the composer docks after you send the first message.
 Turn on **Composer context** to keep those controls visible after the thread starts. This preference
 applies to the web and desktop clients.
 
+## Views
+
+On web and desktop, the grid button in a thread's header opens **Open a surface**, where you choose a
+view such as the browser, terminal, files, diff, pull request, linked items, a device, or a side
+chat. Press the letter shown beside a view to open it from the keyboard.
+
+**Open views as** in **Settings → Appearance** sets where views open. **Sidebar**, the default,
+opens them in the right panel beside the thread. **Tabs** opens each one as a full-width tab in the
+thread, after a pinned **Thread** tab that always returns to the conversation. Your draft and
+scroll position stay as you left them, and the agent and terminals keep running. Each thread has its
+own tabs. Opening a view that is already open selects its tab; files opened from **Files** each get
+their own tab.
+
+With Tabs, the terminal shortcut opens a terminal tab instead of the terminal drawer, and the
+right panel shortcut switches between the thread and its last tab. **Open pull requests and changes
+panels proactively** has no effect with Tabs, so a finished turn does not switch you away from the
+thread.
+
 ## Math
 
 Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown

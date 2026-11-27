@@ -7,6 +7,7 @@ import {
   type ChatWidth,
   type HtmlPreviewWidth,
   type EffortDisplay,
+  type SurfaceLayout,
   type EnvironmentIdentificationMode,
   MAX_APPEARANCE_CONTRAST,
   MAX_GLASS_OPACITY,
@@ -85,6 +86,11 @@ const HTML_PREVIEW_WIDTH_LABELS: Record<HtmlPreviewWidth, string> = {
   chat: msg("Match chat", { $context: "HTML preview width" }),
   wide: CHAT_WIDTH_LABELS.wide,
   full: CHAT_WIDTH_LABELS.full,
+};
+
+const SURFACE_LAYOUT_LABELS: Record<SurfaceLayout, string> = {
+  tabs: msg("Tabs", { $context: "open views as tabs" }),
+  sidebar: msg("Sidebar", { $context: "open views in a sidebar" }),
 };
 
 const EFFORT_DISPLAY_LABELS: Record<EffortDisplay, string> = {
@@ -338,6 +344,45 @@ export function AppearanceSettingsPanel() {
                   <SelectItem value="chat">{gt("Match chat (default)")}</SelectItem>
                   <SelectItem value="wide">{m(HTML_PREVIEW_WIDTH_LABELS.wide)}</SelectItem>
                   <SelectItem value="full">{m(HTML_PREVIEW_WIDTH_LABELS.full)}</SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("surface-layout")}
+          description={gt(
+            "Open views such as the browser, terminal, files, and diff beside the thread, or as full-width tabs in it.",
+          )}
+          resetAction={
+            settings.surfaceLayout !== DEFAULT_UNIFIED_SETTINGS.surfaceLayout ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset open views as to default")}
+                onClick={() =>
+                  updateSettings({ surfaceLayout: DEFAULT_UNIFIED_SETTINGS.surfaceLayout })
+                }
+              />
+            ) : null
+          }
+          control={
+            <div className="w-full sm:w-40">
+              <Select
+                value={settings.surfaceLayout}
+                onValueChange={(value) => {
+                  if (value === "tabs" || value === "sidebar")
+                    updateSettings({ surfaceLayout: value });
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-full min-w-0"
+                  aria-label={gt("Open views as")}
+                >
+                  <SelectValue>{m(SURFACE_LAYOUT_LABELS[settings.surfaceLayout])}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="tabs">{m(SURFACE_LAYOUT_LABELS.tabs)}</SelectItem>
+                  <SelectItem value="sidebar">{gt("Sidebar (default)")}</SelectItem>
                 </SelectPopup>
               </Select>
             </div>

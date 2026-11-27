@@ -33,7 +33,7 @@ import stylesheet from "~/index.css?inline";
 import { environmentContextRecord } from "~/lib/composerContextRecords";
 import { startWorkspaceFocus } from "~/lib/workspaceFocus";
 import { usePromptStashStore } from "~/promptStashStore";
-import { useRightPanelStore } from "~/rightPanelStore";
+import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
 import { getRouter } from "~/router";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { environmentThreadDetails } from "~/state/threads";
@@ -919,14 +919,80 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
     router: false,
   });
   const composer = page.getByTestId("composer-editor");
-  const toggle = page.getByRole("button", { name: "Toggle right panel", exact: true });
-  await expect.element(toggle).toHaveAttribute("aria-pressed", "false");
-  await toggle.click();
+  const closePanel = page.getByRole("button", { name: "Close panel", exact: true });
+  await expect.element(closePanel).not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Open a surface", exact: true }).click();
   await page.getByRole("button", { name: /^Files/ }).click();
+  await expect.element(closePanel).toBeVisible();
   await composer.click();
   await userEvent.keyboard("{Control>}t{/Control}");
   await expect.element(page.getByRole("menuitem", { name: /Files/ })).toBeVisible();
-  await expect.element(toggle).toHaveAttribute("aria-pressed", "true");
+});
+
+it("the Tabs layout opens surfaces as full-width tabs beside a pinned thread tab", async () => {
+  await page.viewport(1280, 800);
+  const thread = threadWithHistory("thread-surface-tabs", 1);
+  using _environment = installFakeEnvironment([thread]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+    surfaceLayout: "tabs",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, {
+    // AppRoot brings its own router.
+    router: false,
+  });
+  const threadRef = scopeThreadRef(ENVIRONMENT_ID, thread.id);
+  const composer = page.getByTestId("composer-editor");
+  const threadTab = page.getByRole("button", { name: "Thread, pinned", exact: true });
+  const filesTab = page.getByRole("button", { name: "Files", exact: true });
+  const openFilesFromLauncher = async () => {
+    await page.getByRole("button", { name: "Open a surface", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Files/ })
+      .click();
+  };
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await composer.click();
+  await userEvent.keyboard("Keep this draft");
+
+  await openFilesFromLauncher();
+  await expect.element(filesTab).toBeVisible();
+  await expect.element(threadTab).not.toHaveAttribute("aria-current");
+  await expect.element(composer).not.toBeVisible();
+  // The sidebar panel's own close control does not appear in Tabs.
+  await expect
+    .element(page.getByRole("button", { name: "Close panel", exact: true }))
+    .not.toBeInTheDocument();
+
+  await threadTab.click();
+  await expect.element(composer).toBeVisible();
+  await expect.element(composer).toHaveTextContent("Keep this draft");
+
+  // Opening Files again focuses its tab instead of adding a second one.
+  await openFilesFromLauncher();
+  await expect.element(composer).not.toBeVisible();
+  const surfaces = () =>
+    selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef).surfaces;
+  expect(surfaces().filter((surface) => surface.kind === "files")).toHaveLength(1);
+
+  // The right panel shortcut switches between the thread and its last tab.
+  await userEvent.keyboard("{Control>}{Alt>}b{/Alt}{/Control}");
+  await expect.element(composer).toBeVisible();
+  await userEvent.keyboard("{Control>}{Alt>}b{/Alt}{/Control}");
+  await expect.element(composer).not.toBeVisible();
+
+  // Closing the active tab returns to the thread when no other tab is left.
+  await page.getByRole("button", { name: "Close Files", exact: true }).click();
+  await expect.element(filesTab).not.toBeInTheDocument();
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await expect.element(composer).toHaveTextContent("Keep this draft");
+  expect(surfaces()).toEqual([]);
 });
 
 it("selecting a side-chat tab focuses that side chat's composer", async () => {
