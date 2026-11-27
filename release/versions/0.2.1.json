@@ -1,0 +1,28 @@
+{
+  "version": "0.2.1",
+  "previousVersion": "0.2.0",
+  "upstream": {
+    "tag": "v0.1.14-nightly.20261127.5345",
+    "commit": "4c72563d949f4aa022c7b10e5c2fea3464e17a9d"
+  },
+  "source": {
+    "upstream": {
+      "tag": "v0.1.14-nightly.20261127.5345",
+      "commit": "4c72563d949f4aa022c7b10e5c2fea3464e17a9d"
+    },
+    "patches": [
+      {
+        "branch": "feature/create-files-nightly",
+        "base": "4c72563d949f4aa022c7b10e5c2fea3464e17a9d",
+        "commit": "10a69ed9fa5fc65729b813e427ce0a0cece99351"
+      },
+      {
+        "branch": "dev/patch",
+        "parent": "feature/create-files-nightly",
+        "base": "10a69ed9fa5fc65729b813e427ce0a0cece99351",
+        "commit": "2542a1b3ea6bf0f6393341f9a6f4620cda0bb7ef"
+      }
+    ]
+  },
+  "notesSha256": "bb7b4bed7cd4e26a8d2ff1a700b1fc27556c6fbc0d853a0900419784231649a9"
+}
