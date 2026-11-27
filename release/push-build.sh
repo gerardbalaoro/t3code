@@ -33,7 +33,18 @@ if [[ -n "$previous" ]]; then
   git -C "$SOURCE_DIR" fetch --quiet --no-tags --filter=blob:none origin "$previous"
   if git -C "$SOURCE_DIR" cat-file -e "$previous:.gcode-release/release.json" 2>/dev/null; then
     prior_version="$(git -C "$SOURCE_DIR" show "$previous:.gcode-release/release.json" | jq -er .version)"
-    if [[ "$(printf '%s\n' "$VERSION" "$prior_version" | sort -V | tail -1)" == "$prior_version" ]]; then
+    if [[ "$prior_version" == "$VERSION" ]]; then
+      tag="$(git -C "$SOURCE_DIR" ls-remote --refs origin "refs/tags/v$VERSION")"
+      if [[ -n "$tag" ]]; then
+        echo "G Code $VERSION already has a tag. Rerun its original build or inspect the draft release." >&2
+        exit 1
+      fi
+      active="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=dev%2Fmain&head_sha=$previous" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+      if [[ "$active" != 0 ]]; then
+        echo "Wait for the original dev/main build to finish before replacing G Code $VERSION." >&2
+        exit 1
+      fi
+    elif [[ "$(printf '%s\n' "$VERSION" "$prior_version" | sort -V | tail -1)" == "$prior_version" ]]; then
       echo "dev/main already carries G Code $prior_version." >&2
       exit 1
     fi

@@ -37,6 +37,12 @@ The release PR saves the notes and source instructions for its version. Changese
 
 For a failed assembly, rerun its workflow or dispatch **Assemble G Code release** on `main` with the version. For a failed build or publish, rerun the original `dev/main` run. GitHub then uses the same pushed commit. Publish each recorded release before advancing to the next one.
 
+## Correct an Unpublished Release
+
+If a build needs a source fix, wait for its Actions run to finish. Open a PR that corrects the saved source instructions for that version in `release/versions/`. The source check replays the correction. Merging the PR replaces the failed build while its version is untagged.
+
+If publishing already created the tag, rerun the original build to finish uploading the release.
+
 ## Local Checks
 
 Run these commands from the release tooling checkout.
