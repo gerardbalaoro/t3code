@@ -19,7 +19,7 @@
       {
         "branch": "dev/patch",
         "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
-        "commit": "df47e9c25cdb66e28bf9f90967f37429740d7b84"
+        "commit": "e0c6c7b2249d454331b168d1b8a09ed047f19e53"
       }
     ]
   },
