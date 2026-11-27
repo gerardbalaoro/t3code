@@ -13110,5 +13110,10 @@
   "a85651f4c6c5e449": "无法创建文件夹。请重试。",
   "052cfecdebf6081d": "新建文件夹",
   "5b3b63d0c9d04238": "此连接不支持创建文件夹。",
-  "117072c3108e16ff": "新建文件夹"
+  "117072c3108e16ff": "新建文件夹",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode 命令",
+  "ccf9b9f3089a07b2": "无法加载 gcode 命令状态。",
+  "25654c1fb38a3107": "基于 T3 Code {version}"
 }

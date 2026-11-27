@@ -13096,5 +13096,10 @@
   "a85651f4c6c5e449": "Der Ordner konnte nicht erstellt werden. Versuche es erneut.",
   "052cfecdebf6081d": "Neuer Ordner",
   "5b3b63d0c9d04238": "Über diese Verbindung können keine Ordner erstellt werden.",
-  "117072c3108e16ff": "Neuer Ordner"
+  "117072c3108e16ff": "Neuer Ordner",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode-Befehl",
+  "ccf9b9f3089a07b2": "Der Status des gcode-Befehls konnte nicht geladen werden.",
+  "25654c1fb38a3107": "Basiert auf T3 Code {version}"
 }
