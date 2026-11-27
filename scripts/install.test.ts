@@ -116,6 +116,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
   it.each([
     // regression: #32897
     ["stable", "1.2.3", 1],
+    ["", "1.2.3", 0],
     ["preview", "1.2.4-preview.20261019.50", 0],
   ])("finds %s %s behind nightlies and %i HTTP 504s", async (channel, version, failures) => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-index-"));
