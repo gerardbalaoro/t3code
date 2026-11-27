@@ -1,21 +1,21 @@
-name: Nightly
+name: G Code Release
 
-# Builds and publishes one `dev/main` commit as a nightly release. Sync starts
-# it; it can also be run by hand with a `dev/main` commit.
-#
-# Packaging is upstream's own release-desktop.yml, called from `dev/main`, so its
-# fixes arrive with every sync. The jobs around it mirror the parts of
-# upstream's release.yml that apply to a fork: version, JS bundle, publish.
 on:
+  pull_request:
+    branches: [main]
+    paths: ["release/versions/**"]
+  push:
+    branches: [main]
+    paths: ["release/versions/**"]
   workflow_dispatch:
     inputs:
-      ref:
-        description: "dev/main commit to build (full SHA)"
-        required: true
-        type: string
+      publish:
+        description: Publish the current recorded version after verification
+        type: boolean
+        default: false
 
 concurrency:
-  group: nightly
+  group: gcode-release-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
   cancel-in-progress: false
 
 permissions:
@@ -28,30 +28,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
+      ref: ${{ steps.version.outputs.ref }}
+      notes: ${{ steps.version.outputs.notes }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      upstream_commit: ${{ steps.version.outputs.upstream_commit }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
       upstream_tag: ${{ steps.version.outputs.upstream_tag }}
       clerk_publishable_key: ${{ steps.connect.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ steps.connect.outputs.clerk_jwt_template }}
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ steps.connect.outputs.relay_url }}
     steps:
-      - name: Check the commit is on dev/main
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - id: version
+        name: Verify the recorded release and its retained source
         env:
           GH_TOKEN: ${{ github.token }}
-          REF: ${{ inputs.ref }}
         run: |
-          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
-          head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/dev/main" --jq .object.sha)"
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$REF...$head" --jq .status)"
-          [[ "$status" == "identical" || "$status" == "ahead" ]] ||
-            { echo "$REF is not on dev/main ($status)" >&2; exit 1; }
+          node release/version.mjs verify
+          ref="$(sed -n 's/^ref=//p' "$GITHUB_OUTPUT")"
+          retained="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/gcode/source/$ref" --jq .object.sha)"
+          [[ "$retained" == "$ref" ]]
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+          ref: ${{ steps.version.outputs.ref }}
+          persist-credentials: false
           filter: blob:none
           sparse-checkout: |
             /*
@@ -69,22 +74,6 @@ jobs:
         with:
           name: release-dependency-verification
           path: ${{ runner.temp }}/pnpm-metadata/lockfile-verified.jsonl
-
-      - id: version
-        run: |
-          upstream="$(git merge-base HEAD origin/upstream/main)"
-          upstream_tags="$(git ls-remote --tags https://github.com/pingdotgg/t3code.git 'v*-nightly.*')"
-          tag="$(awk -v sha="$upstream" '$1 == sha { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' <<< "$upstream_tags" | sort -V | tail -n 1)"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]; then
-            echo "No upstream nightly version found for $upstream." >&2
-            exit 1
-          fi
-          {
-            echo "upstream_commit=$upstream"
-            echo "upstream_tag=$tag"
-            echo "tag=$tag"
-            echo "version=${tag#v}"
-          } >> "$GITHUB_OUTPUT"
 
       # T3 Connect's public production values, as upstream ships them for forks.
       - id: connect
@@ -112,7 +101,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.preflight.outputs.ref }}
+          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
@@ -149,6 +139,17 @@ jobs:
       - name: Build JS bundle
         run: vp run ${{ steps.bundle_build.outputs.script }}
 
+      - name: Verify CLI version, triage command, and desktop provenance
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          version="$(node apps/server/dist/bin.mjs --version)"
+          grep -Fx "gcode v$VERSION" <<< "$version"
+          grep -Fx "Based on T3 Code $GCODE_UPSTREAM_TAG" <<< "$version"
+          triage="$(node apps/server/dist/bin.mjs triage --help)"
+          grep -F "gcode triage" <<< "$triage"
+          grep -Fq "$GCODE_UPSTREAM_TAG" apps/desktop/dist-electron/main.cjs
+
       # Packaging restores this hidden file from the visible copy in the artifact.
       - name: Stage web asset manifest
         shell: bash
@@ -168,16 +169,17 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Use upstream's packaging on GitHub-hosted runners. macOS ships arm64 only.
+  # Pin the reusable packaging workflow here. Each job checks out the
+  # separately recorded source SHA, so retries survive moves of dev/main.
   # Builds are unsigned. To sign, pass the signing secrets by name here.
   desktop_mac_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
     with:
       version: ${{ needs.preflight.outputs.version }}
       upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
+      ref: ${{ needs.preflight.outputs.ref }}
+      release_channel: stable
       relay_client_tracing: false
       clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
@@ -195,12 +197,12 @@ jobs:
 
   desktop_linux_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
     with:
       version: ${{ needs.preflight.outputs.version }}
       upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
+      ref: ${{ needs.preflight.outputs.ref }}
+      release_channel: stable
       relay_client_tracing: false
       clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
@@ -218,12 +220,12 @@ jobs:
 
   desktop_linux_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
     with:
       version: ${{ needs.preflight.outputs.version }}
       upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
+      ref: ${{ needs.preflight.outputs.ref }}
+      release_channel: stable
       relay_client_tracing: false
       clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
@@ -240,12 +242,12 @@ jobs:
 
   desktop_win_x64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
     with:
       version: ${{ needs.preflight.outputs.version }}
       upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
+      ref: ${{ needs.preflight.outputs.ref }}
+      release_channel: stable
       relay_client_tracing: false
       clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
@@ -263,12 +265,12 @@ jobs:
 
   desktop_win_arm64:
     needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
+    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
     with:
       version: ${{ needs.preflight.outputs.version }}
       upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ inputs.ref }}
-      release_channel: nightly
+      ref: ${{ needs.preflight.outputs.ref }}
+      release_channel: stable
       relay_client_tracing: false
       clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
@@ -284,7 +286,7 @@ jobs:
       resource_key: win32-arm64
       cli_archive: true
 
-  publish:
+  verify_assets:
     needs:
       [
         preflight,
@@ -297,23 +299,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      TAG: ${{ needs.preflight.outputs.tag }}
-      NAME: G Code Nightly ${{ needs.preflight.outputs.version }} (upstream ${{ needs.preflight.outputs.tag }})
-      REF: ${{ inputs.ref }}
+      VERSION: ${{ needs.preflight.outputs.version }}
     steps:
-      # Publishing creates the tag on a commit that changes workflow files.
-      - id: app
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          filter: blob:none
-          token: ${{ steps.app.outputs.token }}
+          ref: ${{ needs.preflight.outputs.ref }}
+          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
@@ -322,6 +313,11 @@ jobs:
       - uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=@t3tools/scripts...
+
+      - uses: actions/checkout@v6
+        with:
+          path: release-project
+          persist-credentials: false
 
       - uses: actions/download-artifact@v8
         with:
@@ -338,9 +334,13 @@ jobs:
       # Installers verify archives against this file.
       - working-directory: release-assets
         run: |
-          shopt -s nullglob
-          archives=(gcode-*.tar.gz gcode-*.zip)
-          (( ${#archives[@]} > 0 )) || { echo "No CLI archives were produced." >&2; exit 1; }
+          archives=(
+            "gcode-$VERSION-darwin-arm64.tar.gz"
+            "gcode-$VERSION-linux-x64.tar.gz"
+            "gcode-$VERSION-linux-arm64.tar.gz"
+            "gcode-$VERSION-win32-x64.zip"
+            "gcode-$VERSION-win32-arm64.zip"
+          )
           sha256sum "${archives[@]}" > SHA256SUMS
 
       # The macOS manifest already contains its only architecture. Windows still
@@ -365,79 +365,48 @@ jobs:
             rm -- "$primary" "$secondary"
           done
 
-      # Find the upstream nightly used to assemble this build.
-      - name: Write release notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-          UPSTREAM_COMMIT: ${{ needs.preflight.outputs.upstream_commit }}
+      - name: Verify update manifests and stage installer scripts
         run: |
-          gh api "repos/pingdotgg/t3code/releases/tags/$TAG" --jq '.body // ""' > upstream-notes.md
-          grep -q '[^[:space:]]' upstream-notes.md ||
-            { echo "The upstream release has no notes for $TAG." >&2; exit 1; }
-          IFS= read -r first_line < upstream-notes.md
-          heading="**$TAG**"
-          {
-            echo "### G Code patches"
-            echo
-            git log --reverse --format='- %s' "$UPSTREAM_COMMIT..$REF"
-            printf '\n---\n\n'
-            if [[ "$first_line" == "$heading"* ]]; then
-              printf '### %s%s\n' "$TAG" "${first_line#"$heading"}"
-              tail -n +2 upstream-notes.md
-            elif [[ "$first_line" == "### $TAG"* ]]; then
-              cat upstream-notes.md
-            else
-              printf '### %s\n\n' "$TAG"
-              cat upstream-notes.md
-            fi
-          } > notes.md
-          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+          node release-project/release/update-notes.mjs release-assets "$VERSION"
+          cp scripts/install.sh scripts/install.ps1 release-assets/
+          cp "release-project/release/versions/$VERSION.json" release-assets/build-provenance.json
 
-      # A draft hides a new release until every file is attached and the tag
-      # points to the build commit. Publish as Latest so mise can find it.
-      # Updaters match "nightly" in the tag regardless of the prerelease flag.
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          shopt -s nullglob extglob
-          files=(release-assets/*.{dmg,zip,AppImage,deb,exe,blockmap,tar.gz} release-assets/!(builder-debug).yml release-assets/SHA256SUMS)
-          if release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isImmutable)"; then
-            if jq -e '.isImmutable' <<< "$release" >/dev/null; then
-              echo "GitHub marked release $TAG immutable." >&2
-              exit 1
-            fi
-            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
-            previous_assets="$(jq -r '.assets[].name' <<< "$release")"
-            while IFS= read -r asset; do
-              if [[ -n "$asset" ]] && ! printf '%s\n' "${files[@]##*/}" | grep -Fx -- "$asset" >/dev/null; then
-                gh release delete-asset "$TAG" "$asset" --repo "$GITHUB_REPOSITORY" --yes
-              fi
-            done <<< "$previous_assets"
-          else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
-              --target "$REF" --title "$NAME" --notes-file notes.md "${files[@]}"
-          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: verified-release-assets
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
 
-          tag_ref="refs/tags/$TAG"
-          existing="$(git ls-remote --refs --tags origin "$tag_ref")"
-          existing_sha="${existing%%$'\t'*}"
-          if [[ "$existing_sha" != "$REF" ]]; then
-            git push "--force-with-lease=$tag_ref:$existing_sha" origin "${REF}:$tag_ref"
-          fi
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --target "$REF" \
-            --title "$NAME" --notes-file notes.md --draft=false --latest
+  publish:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish)
+    needs: [preflight, verify_assets]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TAG: ${{ needs.preflight.outputs.tag }}
+      NAME: G Code ${{ needs.preflight.outputs.version }}
+      REF: ${{ needs.preflight.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: verified-release-assets
+          path: release-assets
 
-      # Desktop nightlies find their update through update-feed/nightly.json
-      # (upstream's electron-updater patch), so point it at this release.
-      - name: Point the update feed at this nightly
+      # Tag creation needs Workflows write access because the commit includes
+      # upstream workflow files. Keep the token out of the build steps.
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Publish the verified release
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '{tag_name, name, body}' > nightly.json
-          gh release view update-feed > /dev/null 2>&1 ||
-            gh release create update-feed --prerelease --latest=false --title "Update feed" \
-              --notes "Desktop nightlies read nightly.json here to find the newest nightly. Do not delete it."
-          gh release upload update-feed nightly.json --clobber
-          gh release edit update-feed --draft=false --prerelease --latest=false
+          PREVIOUS_TAG: ${{ needs.preflight.outputs.previous_tag }}
+          NOTES: ${{ needs.preflight.outputs.notes }}
+        run: bash release/publish.sh

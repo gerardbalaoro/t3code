@@ -1,0 +1,11 @@
+{
+  "name": "gcode",
+  "version": "0.1.13",
+  "private": true,
+  "scripts": {
+    "test": "node --test release/*.test.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "3.0.3"
+  }
+}

@@ -1,139 +1,70 @@
 name: Sync
 
-# Replays the branches listed in branches.txt on the latest upstream nightly.
 on:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "8,23,38,53 * * * *"
-  push:
-    branches: [main]
-    paths: [branches.txt, sync.sh, check-upstream-icons.sh, ".github/workflows/*.yml"]
   workflow_dispatch:
-    inputs:
-      nightly:
-        description: "Build the current upstream nightly and replace its release if it exists"
-        type: boolean
-        default: false
-
-concurrency:
-  group: sync
-  cancel-in-progress: false
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
-  sync:
+  source:
+    name: Check release inputs
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Check whether Nightly is using the build branches
-        id: active
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?per_page=100" \
-            --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
-          echo "nightly=$count" >> "$GITHUB_OUTPUT"
-          if (( count > 0 )); then echo "A nightly is already running." >> "$GITHUB_STEP_SUMMARY"; fi
-
-      # The default token cannot push commits that change workflow files, and
-      # upstream's commits do. The app can, and only on this repository.
-      - id: app
-        if: steps.active.outputs.nightly == '0'
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@v6
-        if: steps.active.outputs.nightly == '0'
         with:
-          path: project
-
-      - uses: actions/checkout@v6
-        if: steps.active.outputs.nightly == '0'
-        with:
-          ref: upstream/main
-          path: work
           fetch-depth: 0
-          filter: blob:none
-          token: ${{ steps.app.outputs.token }}
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
-
-      - id: sync
-        if: steps.active.outputs.nightly == '0'
-        working-directory: work
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm test
+      - name: Validate changes to release inputs
         env:
-          SYNC_REPORT: ${{ runner.temp }}/sync-report.txt
+          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          git config user.name "${{ steps.app.outputs.app-slug }}[bot]"
-          git config user.email "${{ steps.app.outputs.app-slug }}[bot]@users.noreply.github.com"
-          ../project/sync.sh
+          files="$(git diff --name-only "$BASE" HEAD)"
+          if grep -qE '^release/versions/' <<< "$files"; then
+            node release/version.mjs verify
+            expected="$(jq -r .commit "release/versions/$(jq -r .version package.json).json")"
+            candidate="$(mktemp -d)"
+            actual="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
+            [[ "$actual" == "$expected" ]] || { echo "The release record does not match the assembled source."; exit 1; }
+          elif grep -qE '^(release/source\.json|release/upstream/|\.changeset/.*\.md$)' <<< "$files"; then
+            npm ci --ignore-scripts
+            node release/version.mjs validate
+            candidate="$(mktemp -d)"
+            source="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
+            echo "Assembled source: `$source`" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-      - name: Explain a blocked sync
-        if: failure() && steps.sync.outcome == 'failure'
+  discover:
+    name: Check for an upstream nightly
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Compare the approved base with upstream
         run: |
+          latest="$(git ls-remote --tags --refs https://github.com/pingdotgg/t3code.git 'v*-nightly.*' |
+            sed 's|.*refs/tags/||' | sort -V | tail -n 1)"
+          [[ -n "$latest" ]]
+          approved="$(jq -r .upstream.tag release/source.json)"
           {
-            echo "## Build branches were not updated"
-            echo
-            echo '```'
-            cat "$RUNNER_TEMP/sync-report.txt" 2>/dev/null || echo "See the sync step's log."
-            echo '```'
-            echo
-            echo "The previous build branches and release are available."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # Pushing upstream's commits registers upstream's workflows here. They
-      # need upstream's runners and secrets, so they can only queue or fail.
-      - name: Keep upstream's workflows off in this fork
-        if: ${{ !cancelled() && steps.active.outputs.nightly == '0' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow list --repo "$GITHUB_REPOSITORY" --json path,state --jq '.[] | select(.state == "active") | .path' |
-            while read -r path; do
-              case "$path" in
-                .github/workflows/sync.yml | .github/workflows/nightly.yml | .github/workflows/release-desktop.yml) ;;
-                *) gh workflow disable "${path##*/}" --repo "$GITHUB_REPOSITORY" && echo "Disabled $path" ;;
-              esac
-            done
-
-      - name: Start a nightly if due
-        if: steps.sync.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEV: ${{ steps.sync.outputs.dev_main }}
-          UPSTREAM_NIGHTLY: ${{ steps.sync.outputs.upstream_nightly }}
-          FORCE: ${{ inputs.nightly == true }}
-        run: |
-          state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml" --jq .state)"
-          if [[ "$state" != "active" ]]; then
-            echo "Nightly is paused." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if [[ -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly.yml --json status --jq '.[] | select(.status != "completed") | .status')" ]]; then
-            echo "A nightly is already running."
-            exit 0
-          fi
-          # Nightly names each release "... (upstream <tag>)".
-          last="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" \
-            --jq '[.[] | select(.draft | not) | select(.tag_name | test("-nightly\\.")) | select(.name | startswith("G Code Nightly "))][0] // empty | "\(.tag_name) \(.target_commitish) \(.name | capture("\\(upstream (?<t>[^)]+)\\)").t? // "none")"')"
-          read -r last_tag last_ref last_upstream <<<"$last"
-          if [[ "$FORCE" != "true" && "$last_tag" == "$UPSTREAM_NIGHTLY" ]]; then
-            echo "G Code already has a release for $UPSTREAM_NIGHTLY."
-            exit 0
-          fi
-          if [[ "$FORCE" != "true" && "$last_ref" == "$DEV" ]]; then
-            echo "The latest nightly already contains this dev/main commit."
-            exit 0
-          fi
-          if [[ "$FORCE" != "true" && "$last_upstream" == "$UPSTREAM_NIGHTLY" ]]; then
-            echo "The latest nightly is already on upstream $UPSTREAM_NIGHTLY. Branch changes ship with the next one."
-            exit 0
-          fi
-          gh workflow run nightly.yml --repo "$GITHUB_REPOSITORY" --ref main -f ref="$DEV"
-          echo "Started a nightly for $DEV." >> "$GITHUB_STEP_SUMMARY"
+            echo "Approved T3 Code base: $approved"
+            echo "Latest T3 Code nightly: $latest"
+            if [[ "$latest" != "$approved" ]]; then
+              echo "Open a dev/* PR to review this upstream update."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"

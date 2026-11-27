@@ -1,0 +1,24 @@
+{
+  "upstream": {
+    "tag": "v0.1.13-nightly.20261125.5258",
+    "commit": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7"
+  },
+  "patches": [
+    {
+      "branch": "feature/create-files",
+      "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
+      "commit": "c6641b1075aeed042e7f536d7cc4a1f186e6e7ca"
+    },
+    {
+      "branch": "dev/patch",
+      "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
+      "commit": "354254423b6d723f728a8482d42a1861bd526d4c"
+    },
+    {
+      "branch": "feat/gcode-distribution",
+      "parent": "dev/patch",
+      "base": "354254423b6d723f728a8482d42a1861bd526d4c",
+      "commit": "6387b0937f2b0853ff82c3e5cef5578953e1d99f"
+    }
+  ]
+}
