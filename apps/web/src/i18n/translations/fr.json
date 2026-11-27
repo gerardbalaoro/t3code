@@ -13104,5 +13104,10 @@
   "a85651f4c6c5e449": "Impossible de créer le dossier. Réessayez.",
   "052cfecdebf6081d": "Nouveau dossier",
   "5b3b63d0c9d04238": "Cette connexion ne permet pas de créer des dossiers.",
-  "117072c3108e16ff": "Nouveau dossier"
+  "117072c3108e16ff": "Nouveau dossier",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Commande gcode",
+  "ccf9b9f3089a07b2": "Échec du chargement de l’état de la commande gcode.",
+  "25654c1fb38a3107": "Basé sur T3 Code {version}"
 }
