@@ -714,7 +714,7 @@ process.exit(0);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-no-state-" });
-      const versionDir = path.join(root, "runtime", "versions", "1.0.0");
+      const versionDir = path.join(root, "gcode", "versions", "1.0.0");
       yield* writeFakeRuntime(
         fs,
         path,

@@ -769,7 +769,7 @@ async function installedRuntimeVersion(
   ) {
     return unitVersion;
   }
-  const entries = await NodeFSP.readdir(NodePath.join(baseDir, "runtime", "versions")).catch(
+  const entries = await NodeFSP.readdir(NodePath.join(baseDir, "gcode", "versions")).catch(
     () => [],
   );
   let newest: string | undefined;
