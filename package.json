@@ -1,6 +1,6 @@
 {
   "name": "gcode",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "scripts": {
     "test": "node --test release/*.test.mjs"
