@@ -35,7 +35,7 @@ if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
 }
 
 // tsdown SEA needs one chunk (sourcemaps count) and Node >=25.7, so package separately.
-// "bundle" emits the embedded CLI. "1" builds dist-exe/t3 from the bootstrap.
+// "bundle" emits the embedded CLI. "1" builds dist-exe/gcode from the bootstrap.
 // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
 // "bootstrap" stops at bin.mjs for scripts/cli.ts to inject (linux-arm64).
 const packMode = process.env.T3CODE_PACK_EXE;
@@ -124,7 +124,7 @@ export default mergeConfig(
       ...(packMode === "1"
         ? {
             exe: {
-              fileName: "t3",
+              fileName: "gcode",
               outDir: "dist-exe",
               ...(packExecutableTargets ? { targets: packExecutableTargets } : {}),
               // Node SEA useCodeCache breaks import(), which the server needs.
@@ -150,6 +150,7 @@ export default mergeConfig(
         js: "#!/usr/bin/env node\n",
       },
       define: {
+        __GCODE_UPSTREAM_TAG__: JSON.stringify(repoEnv.GCODE_UPSTREAM_TAG?.trim() ?? ""),
         __T3CODE_BUILD_CHANNEL__: JSON.stringify(cliBuildChannel),
         __T3CODE_TELEMETRY_CHANNEL__: JSON.stringify(telemetryChannel),
         __T3CODE_BUILD_RELAY_URL__: JSON.stringify(repoEnv.T3CODE_RELAY_URL?.trim() ?? ""),
