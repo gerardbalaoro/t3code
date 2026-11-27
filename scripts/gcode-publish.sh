@@ -3,11 +3,16 @@ set -euo pipefail
 shopt -s nullglob
 
 repo="$GITHUB_REPOSITORY"
+head="$(git ls-remote --refs origin refs/heads/dev/main | cut -f1)"
+if [[ "$head" != "$REF" ]]; then
+  echo "dev/main has advanced past this build. Publish from the current build." >&2
+  exit 1
+fi
 if [[ -n "$PREVIOUS_TAG" ]]; then
   previous="$(gh release view "$PREVIOUS_TAG" --repo "$repo" --json isDraft --jq .isDraft)"
   [[ "$previous" == false ]] || { echo "Publish $PREVIOUS_TAG before $TAG." >&2; exit 1; }
 fi
-latest="$(gh api "repos/$repo/releases/latest" --jq .tag_name)"
+latest="$(gh release list --repo "$repo" --limit 100 --json isLatest,tagName --jq '.[] | select(.isLatest) | .tagName')"
 if [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$latest" != "$TAG" &&
       "$(printf '%s\n' "$latest" "$TAG" | sort -V | tail -1)" == "$latest" ]]; then
   echo "A newer G Code release ($latest) is already published."
