@@ -13104,5 +13104,10 @@
   "a85651f4c6c5e449": "Det gick inte att skapa mappen. Försök igen.",
   "052cfecdebf6081d": "Ny mapp",
   "5b3b63d0c9d04238": "Det går inte att skapa mappar via den här anslutningen.",
-  "117072c3108e16ff": "Ny mapp"
+  "117072c3108e16ff": "Ny mapp",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Kommandot gcode",
+  "ccf9b9f3089a07b2": "Det gick inte att läsa in statusen för kommandot gcode.",
+  "25654c1fb38a3107": "Baserad på T3 Code {version}"
 }
