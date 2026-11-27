@@ -492,6 +492,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    upstreamT3CodeTag: repoEnv.GCODE_UPSTREAM_TAG?.trim() ?? null,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

@@ -198,7 +198,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     const launcherProtocol = launcher.protocol;
     if (capability === null || launcherProtocol === undefined) {
       return yield* failWith(
-        "Remote updates require the T3 Code background service. Run `t3 service install` on the server machine.",
+        "Remote updates require the T3 Code background service. Run `gcode service install` on the server machine.",
       );
     }
 
@@ -276,7 +276,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
           // until the new server starts, so this marker is what an SSH launch waits on.
           Effect.tap(() =>
             DesktopUpdateMarker.publish(
-              path.join(serverConfig.baseDir, "runtime", DESKTOP_UPDATE_IN_PROGRESS_MARKER_FILE),
+              path.join(serverConfig.baseDir, "gcode", DESKTOP_UPDATE_IN_PROGRESS_MARKER_FILE),
             ).pipe(Effect.provideService(FileSystem.FileSystem, fs), Effect.ignore({ log: true })),
           ),
           Effect.tap(() => onHandoffAccepted()),

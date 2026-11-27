@@ -19,7 +19,7 @@ export const pendingServiceUpdateExists = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const runtimeDir = path.join(config.baseDir, "runtime");
+  const runtimeDir = path.join(config.baseDir, "gcode");
   const stateText = yield* fs
     .readFileString(path.join(runtimeDir, SERVICE_STATE_FILE))
     .pipe(Effect.option);
@@ -33,7 +33,7 @@ export const pendingUpdateHandoffExists = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const runtimeDir = path.join(config.baseDir, "runtime");
+  const runtimeDir = path.join(config.baseDir, "gcode");
   const stopping = yield* fs
     .exists(path.join(runtimeDir, SERVICE_STOP_MARKER_FILE))
     .pipe(Effect.orElseSucceed(() => false));
@@ -45,7 +45,7 @@ export const desktopUpdateRestartPending = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const markerPath = path.join(config.baseDir, "runtime", DESKTOP_UPDATE_RESTART_MARKER_FILE);
+  const markerPath = path.join(config.baseDir, "gcode", DESKTOP_UPDATE_RESTART_MARKER_FILE);
   const marker = yield* fs.stat(markerPath).pipe(Effect.option);
   if (Option.isNone(marker)) {
     return false;

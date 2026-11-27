@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./buildProvenance": {
+      "types": "./src/buildProvenance.ts",
+      "import": "./src/buildProvenance.ts"
+    },
     "./png": {
       "types": "./src/png.ts",
       "import": "./src/png.ts"

@@ -335,6 +335,7 @@ export default defineConfig(({ command }) => {
       ],
     },
     define: {
+      __GCODE_UPSTREAM_TAG__: JSON.stringify(repoEnv.GCODE_UPSTREAM_TAG?.trim() ?? ""),
       "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
       // Override .env URLs with empty values in single-origin dev so clients use window.location.origin.
       "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),

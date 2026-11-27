@@ -95,7 +95,7 @@ const runningConfig = {
     mode: "desktop",
     noBrowser: true,
     port: 3774,
-    t3Home: "/tmp/t3",
+    t3Home: "/tmp/gcode",
     host: "127.0.0.1",
     desktopBootstrapToken: "token",
     tailscaleServeEnabled: false,
@@ -226,7 +226,7 @@ function layerPool(
   );
 }
 
-const markerPath = "/test-home/runtime/desktop-update-in-progress";
+const markerPath = "/test-home/gcode/desktop-update-in-progress";
 const runtimePath = "/test-home/userdata/server-runtime.json";
 
 const makeUpdateMarkerFixture = () =>

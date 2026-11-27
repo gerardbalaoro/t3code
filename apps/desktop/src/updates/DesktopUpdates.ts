@@ -759,7 +759,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const updateRestartMarkerDir = environment.path.join(environment.baseDir, "runtime");
+  const updateRestartMarkerDir = environment.path.join(environment.baseDir, "gcode");
   const updateRestartMarkerPath = environment.path.join(
     updateRestartMarkerDir,
     DESKTOP_UPDATE_RESTART_MARKER_FILE,

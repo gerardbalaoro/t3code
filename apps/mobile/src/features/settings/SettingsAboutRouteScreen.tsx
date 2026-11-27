@@ -54,6 +54,11 @@ function AppSettingsSection() {
   const hiddenUpdateTapCount = useRef(0);
 
   const version = Constants.expoConfig?.version ?? "0.0.0";
+  const upstreamTag: unknown = Constants.expoConfig?.extra?.upstreamT3CodeTag;
+  const upstreamLabel =
+    typeof upstreamTag === "string" && upstreamTag
+      ? gt("Based on T3 Code {version}", { version: upstreamTag })
+      : null;
   // Match app.config.ts's production fallback to avoid mislabeling builds as development.
   const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
@@ -118,10 +123,13 @@ function AppSettingsSection() {
       <Text className="flex-1 text-lg text-foreground">
         <T>Version</T>
       </Text>
-      <View className="items-end">
+      <View className="max-w-[70%] items-end">
         <Text className="text-lg text-foreground-muted">{versionLabel}</Text>
         {statusLabel ? (
           <Text className="text-xs text-foreground-muted/70">{statusLabel}</Text>
+        ) : null}
+        {upstreamLabel ? (
+          <Text className="text-right text-xs text-foreground-muted">{upstreamLabel}</Text>
         ) : null}
       </View>
     </View>
@@ -143,7 +151,11 @@ function AppSettingsSection() {
       <SettingsRow icon="doc.text" label={gt("Legal")} fullScreenTarget="SettingsLegal" />
       {updateCheckAvailable ? (
         <Pressable
-          accessibilityLabel={gt("Version {version}", { version: versionLabel })}
+          accessibilityLabel={
+            upstreamLabel
+              ? `${gt("Version {version}", { version: versionLabel })}. ${upstreamLabel}`
+              : gt("Version {version}", { version: versionLabel })
+          }
           accessibilityRole="text"
           disabled={busy}
           onPress={handleVersionPress}

@@ -162,7 +162,7 @@ export const layer = Layer.effect(
 
     const updateMarkerPath = environment.path.join(
       environment.baseDir,
-      "runtime",
+      "gcode",
       DESKTOP_UPDATE_IN_PROGRESS_MARKER_FILE,
     );
     const serverRuntimePath = environment.path.join(environment.stateDir, "server-runtime.json");

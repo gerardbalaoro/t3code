@@ -13142,5 +13142,10 @@
   "a85651f4c6c5e449": "폴더를 만들 수 없습니다. 다시 시도하세요.",
   "052cfecdebf6081d": "새 폴더",
   "5b3b63d0c9d04238": "이 연결에서는 폴더를 만들 수 없습니다.",
-  "117072c3108e16ff": "새 폴더"
+  "117072c3108e16ff": "새 폴더",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode 명령",
+  "ccf9b9f3089a07b2": "gcode 명령 상태를 불러오지 못했습니다.",
+  "25654c1fb38a3107": "T3 Code {version} 기반"
 }

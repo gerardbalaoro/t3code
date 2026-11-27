@@ -33,7 +33,7 @@ import {
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 const version = "1.2.3";
-const archiveName = `t3-${version}-linux-x64.tar.gz`;
+const archiveName = `gcode-${version}-linux-x64.tar.gz`;
 const archiveBytes = new TextEncoder().encode("not really a tarball");
 const archiveHex = (bytes: Uint8Array) =>
   Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)).pipe(
@@ -60,7 +60,7 @@ const extractingRunner = (fs: FileSystem.FileSystem, path: Path.Path, commands: 
         if (input.command !== "tar" || stagingDir === undefined) {
           return yield* Effect.die(`unexpected command ${input.command}`);
         }
-        yield* fs.writeFileString(path.join(stagingDir, "t3"), "#!/bin/sh\n").pipe(Effect.orDie);
+        yield* fs.writeFileString(path.join(stagingDir, "gcode"), "#!/bin/sh\n").pipe(Effect.orDie);
         return {
           stdout: "",
           stderr: "",
@@ -98,7 +98,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
             Effect.orDie,
           ),
       });
-      assert.equal(paths.entryPath, path.join(paths.versionDir, "t3"));
+      assert.equal(paths.entryPath, path.join(paths.versionDir, "gcode"));
       assert.deepEqual(pinnedRuntimeCommand(paths), { command: paths.entryPath, args: [] });
       assert.deepEqual(requests, [
         `https://releases.example/download/v${version}/SHA256SUMS`,
@@ -156,12 +156,12 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       }).pipe(Effect.forkScoped);
       yield* Deferred.await(firstChunk);
       // Nothing is staged mid-download, so an age-based prune elsewhere cannot remove it.
-      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions")), []);
+      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "gcode", "versions")), []);
       yield* Fiber.interrupt(install);
       assert.deepEqual(progress.at(-1), { stage: "download", received: 4, total: undefined });
       assert.isTrue(progress.every((event) => event.stage === "download"));
       assert.isTrue(cancelled);
-      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions")), []);
+      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "gcode", "versions")), []);
     }),
   );
 
@@ -436,7 +436,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       assert.instanceOf(error, PinnedRuntimeInstallError);
       assert.equal(error.step, "verifying the t3 release archive checksum");
       assert.deepEqual(commands, []);
-      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions")), []);
+      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "gcode", "versions")), []);
     }),
   );
 
@@ -604,8 +604,10 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
 
 it("isVersionExecutable accepts only <version>/t3, never another drive or program", () => {
   const win32 = NodePath.win32 as unknown as Path.Path;
-  assert.isTrue(isVersionExecutable(win32, "C:\\t3\\versions", "C:\\t3\\versions\\1.0.0\\t3.exe"));
-  assert.isFalse(isVersionExecutable(win32, "C:\\t3\\versions", "D:\\t3.exe"));
+  assert.isTrue(
+    isVersionExecutable(win32, "C:\\t3\\versions", "C:\\t3\\versions\\1.0.0\\gcode.exe"),
+  );
+  assert.isFalse(isVersionExecutable(win32, "C:\\t3\\versions", "D:\\gcode.exe"));
   assert.isFalse(
     isVersionExecutable(win32, "C:\\t3\\versions", "C:\\t3\\versions\\1.0.0\\node.exe"),
   );
@@ -631,7 +633,7 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-prune-" });
-    const versionsDir = path.join(baseDir, "runtime", "versions");
+    const versionsDir = path.join(baseDir, "gcode", "versions");
     const now = Duration.toMillis(Duration.days(1));
     yield* TestClock.setTime(now);
     const install = Effect.fn(function* (
@@ -640,7 +642,7 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
     ) {
       const directory = path.join(versionsDir, version);
       yield* fs.makeDirectory(directory, { recursive: true });
-      yield* fs.writeFileString(path.join(directory, "t3"), "");
+      yield* fs.writeFileString(path.join(directory, "gcode"), "");
       if (completed === "never") return;
       const sentinel = path.join(directory, ".install-complete");
       yield* fs.writeFileString(sentinel, `${version}\n`);
@@ -679,15 +681,15 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       yield* fs.makeDirectory(binDir);
       yield* fs.makeDirectory(customBinDir);
       // Chained: the launcher reaches its runtime through a second link.
-      yield* fs.symlink(path.join(versionsDir, "1.2.0", "t3"), path.join(baseDir, "alias-t3"));
-      yield* fs.symlink(path.join(baseDir, "alias-t3"), path.join(binDir, "t3"));
-      yield* fs.symlink(path.join(versionsDir, "1.2.5", "t3"), path.join(customBinDir, "t3"));
+      yield* fs.symlink(path.join(versionsDir, "1.2.0", "gcode"), path.join(baseDir, "alias-t3"));
+      yield* fs.symlink(path.join(baseDir, "alias-t3"), path.join(binDir, "gcode"));
+      yield* fs.symlink(path.join(versionsDir, "1.2.5", "gcode"), path.join(customBinDir, "gcode"));
       yield* fs.writeFileString(
-        path.join(baseDir, "runtime", "launchers"),
-        `${path.join(customBinDir, "t3")}\n`,
+        path.join(baseDir, "gcode", "launchers"),
+        `${path.join(customBinDir, "gcode")}\n`,
       );
       yield* fs.writeFileString(
-        path.join(baseDir, "runtime", "service-state.json"),
+        path.join(baseDir, "gcode", "service-state.json"),
         JSON.stringify({
           protocol: SERVICE_LAUNCHER_PROTOCOL,
           activeVersion: "1.4.0",
@@ -698,11 +700,11 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const removed = yield* prunePinnedRuntimes({
         baseDir,
         keep: ["2.0.0"],
-        references: [`ExecStart=${path.join(versionsDir, "1.3.5", "t3")} __service-launcher`],
+        references: [`ExecStart=${path.join(versionsDir, "1.3.5", "gcode")} __service-launcher`],
       }).pipe(
         Effect.provideService(
           ProcessRunner.ProcessRunner,
-          lsofRunner(`p42\nftxt\nn${path.join(versionsDir, "1.3.0", "t3")}\n`),
+          lsofRunner(`p42\nftxt\nn${path.join(versionsDir, "1.3.0", "gcode")}\n`),
         ),
         Effect.provideService(HostProcess.Platform, "darwin"),
         Effect.provideService(HostProcess.Environment, { T3CODE_INSTALL_BIN_DIR: binDir }),
@@ -714,8 +716,8 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       assert.deepEqual(removed.toSorted(), ["0.8.0", "1.0.0", "1.1.0", "2.1.0"]);
       // The launcher found on PATH is remembered for a service that cannot see it.
       assert.equal(
-        yield* fs.readFileString(path.join(baseDir, "runtime", "launchers")),
-        `${path.join(customBinDir, "t3")}\n\n${path.join(binDir, "t3")}\n`,
+        yield* fs.readFileString(path.join(baseDir, "gcode", "launchers")),
+        `${path.join(customBinDir, "gcode")}\n\n${path.join(binDir, "gcode")}\n`,
       );
       assert.deepEqual((yield* fs.readDirectory(versionsDir)).toSorted(), [
         ".staging-abc",
@@ -740,7 +742,7 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const path = yield* Path.Path;
       const { baseDir } = yield* setup(["1.0.0", "1.1.0"]);
       yield* fs.writeFileString(
-        path.join(baseDir, "runtime", "service-state.json"),
+        path.join(baseDir, "gcode", "service-state.json"),
         JSON.stringify({
           protocol: SERVICE_LAUNCHER_PROTOCOL,
           activeVersion: "1.1.0",
@@ -795,12 +797,12 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const { baseDir, versionsDir } = yield* setup(["1.0.0", "1.1.0"]);
       const binDir = path.join(baseDir, "bin");
       yield* fs.makeDirectory(binDir);
-      yield* fs.symlink(path.join(versionsDir, "1.1.0", "t3"), path.join(binDir, "t3"));
+      yield* fs.symlink(path.join(versionsDir, "1.1.0", "gcode"), path.join(binDir, "gcode"));
       const ownDir = path.join(versionsDir, "1.0.0");
       if (recorded) {
         yield* fs.writeFileString(
-          path.join(baseDir, "runtime", "launchers"),
-          `${path.join(ownDir, "t3")}\n`,
+          path.join(baseDir, "gcode", "launchers"),
+          `${path.join(ownDir, "gcode")}\n`,
         );
       }
 
@@ -842,10 +844,10 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
         // The installer accepts any bin directory, including one under the versions directory.
         const binDir = path.join(versionsDir, "bin");
         yield* fs.makeDirectory(binDir);
-        yield* fs.symlink(path.join(versionsDir, "1.0.0", "t3"), path.join(binDir, "t3"));
+        yield* fs.symlink(path.join(versionsDir, "1.0.0", "gcode"), path.join(binDir, "gcode"));
         yield* fs.writeFileString(
-          path.join(baseDir, "runtime", "launchers"),
-          `${path.join(binDir, "t3")}\n`,
+          path.join(baseDir, "gcode", "launchers"),
+          `${path.join(binDir, "gcode")}\n`,
         );
       } else {
         const linkedDir = path.join(via === "linked dir" ? baseDir : versionsDir, "current");
@@ -877,8 +879,8 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const { baseDir, versionsDir } = yield* setup(["1.0.0", "1.1.0"]);
       const binDir = path.join(baseDir, "custom-bin");
       yield* fs.makeDirectory(binDir);
-      yield* fs.symlink(path.join(versionsDir, "1.0.0", "t3"), path.join(binDir, "t3"));
-      const launchersFile = path.join(baseDir, "runtime", "launchers");
+      yield* fs.symlink(path.join(versionsDir, "1.0.0", "gcode"), path.join(binDir, "gcode"));
+      const launchersFile = path.join(baseDir, "gcode", "launchers");
       yield* fs.writeFileString(launchersFile, recorded);
       const prune = (environment: Record<string, string>) =>
         prunePinnedRuntimes({ baseDir, keep: [] }).pipe(
@@ -907,7 +909,7 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const removed = yield* prune({});
 
       assert.deepEqual(removed, []);
-      assert.isTrue(yield* fs.exists(path.join(versionsDir, "1.0.0", "t3")));
+      assert.isTrue(yield* fs.exists(path.join(versionsDir, "1.0.0", "gcode")));
     }),
   );
 
@@ -916,12 +918,12 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const { baseDir, versionsDir } = yield* setup(["1.0.0", "1.1.0"]);
-      const shim = path.join(baseDir, "t3.cmd");
+      const shim = path.join(baseDir, "gcode.cmd");
       yield* fs.writeFileString(
         shim,
-        `@echo off\r\n"${path.join(versionsDir, "1.0.0", "t3.exe").toUpperCase()}" %*`,
+        `@echo off\r\n"${path.join(versionsDir, "1.0.0", "gcode.exe").toUpperCase()}" %*`,
       );
-      yield* fs.writeFileString(path.join(baseDir, "runtime", "launchers"), `${shim}\n`);
+      yield* fs.writeFileString(path.join(baseDir, "gcode", "launchers"), `${shim}\n`);
 
       const removed = yield* prunePinnedRuntimes({ baseDir, keep: ["2.0.0"] }).pipe(
         Effect.provideService(
@@ -948,7 +950,7 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const { baseDir, versionsDir } = yield* setup(["1.0.0"]);
-      const statePath = path.join(baseDir, "runtime", "service-state.json");
+      const statePath = path.join(baseDir, "gcode", "service-state.json");
       if (state === null) yield* fs.makeDirectory(statePath);
       else if (state !== undefined) yield* fs.writeFileString(statePath, state);
 
@@ -969,13 +971,13 @@ it.layer(NodeServices.layer)("prunePinnedRuntimes", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const { baseDir, versionsDir } = yield* setup(["1.0.0", "1.1.0"]);
-        const entry = path.join(versionsDir, "1.0.0", "t3");
+        const entry = path.join(versionsDir, "1.0.0", "gcode");
         // Multicall coreutils (Ubuntu's uutils) refuse to run renamed, so copy Node instead.
         yield* fs.copyFile(process.execPath, entry);
         yield* fs.chmod(entry, 0o755);
-        const link = path.join(baseDir, "t3");
+        const link = path.join(baseDir, "gcode-custom");
         yield* fs.symlink(entry, link);
-        // Its argv names only the link, as with `t3 serve` run from PATH. Removing the link after
+        // Its argv names only the link, as with `gcode serve` run from PATH. Removing the link after
         // spawning leaves the process's executable as the only reference.
         const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
         yield* spawner.spawn(ChildProcess.make(link, ["-e", "setTimeout(() => {}, 30_000)"]));
@@ -1002,12 +1004,12 @@ it.layer(NodeServices.layer)("launcher lookup on PATH", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-launcher-path-" });
-        const launcher = path.join(root, "t3");
+        const launcher = path.join(root, "gcode");
         yield* fs.writeFileString(launcher, "", { mode: 0o755 });
         const missing = path.join(root, "missing");
         const lookup = (platform: NodeJS.Platform, searchPath: string) =>
           resolveLauncherPath.pipe(
-            Effect.provideService(HostProcess.InvokedAs, "t3"),
+            Effect.provideService(HostProcess.InvokedAs, "gcode"),
             Effect.provideService(HostProcess.Platform, platform),
             Effect.provideService(HostProcess.Environment, { PATH: searchPath }),
             Effect.provideService(HostProcess.WorkingDirectory, root),
@@ -1027,16 +1029,16 @@ it.layer(NodeServices.layer)("launcher lookup on PATH", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-launcher-path-" });
-      const versionsDir = path.join(root, ".t3", "runtime", "versions");
-      const executable = path.join(versionsDir, "1.0.0", "t3");
+      const versionsDir = path.join(root, ".t3", "gcode", "versions");
+      const executable = path.join(versionsDir, "1.0.0", "gcode");
       yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
       yield* fs.writeFileString(executable, "", { mode: 0o755 });
       const bin = path.join(root, "bin");
       yield* fs.makeDirectory(bin);
-      yield* fs.writeFileString(path.join(bin, "t3"), posixLauncherScript(executable), {
+      yield* fs.writeFileString(path.join(bin, "gcode"), posixLauncherScript(executable), {
         mode: 0o755,
       });
-      const script = yield* fs.realPath(path.join(bin, "t3"));
+      const script = yield* fs.realPath(path.join(bin, "gcode"));
       const missing = path.join(root, "missing");
       const lookup = (searchPath: string) =>
         findPosixLauncher({ launchedAs: executable, versionsDir }).pipe(

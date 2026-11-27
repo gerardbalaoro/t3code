@@ -34,7 +34,7 @@ it.live(
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-uninstall-shell-" });
-      const runtimeDir = path.join(baseDir, "runtime");
+      const runtimeDir = path.join(baseDir, "gcode");
       yield* fs.makeDirectory(runtimeDir);
       vi.spyOn(BootService, "layer").mockReturnValue(
         Layer.succeed(
@@ -133,8 +133,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("t3 uninstall com
               current: true,
               installedBaseDir: "/home/me/.t3",
               ...(++reads >= input.otherFromRead ? { otherBaseDir: "/home/me/.t3" } : {}),
-              unitPath: "/home/me/.config/systemd/user/t3code.service",
-              logPath: "/home/me/.t3/userdata/logs/boot-service.log",
+              unitPath: "/home/me/.config/systemd/user/gcode.service",
+              logPath: "/home/me/.t3/userdata/logs/gcode-service.log",
             })),
             withStopped: (operation) => operation,
             restart: Effect.die("unexpected restart"),
@@ -178,16 +178,16 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       const root = yield* fs
         .makeTempDirectoryScoped({ prefix: "t3-uninstall-" })
         .pipe(Effect.flatMap(fs.realPath));
-      const versionsDir = path.join(root, "runtime/versions");
-      const exe = path.join(versionsDir, "1.0.0/t3");
-      const otherExe = path.join(root, "other/runtime/versions/1.0.0/t3");
-      const copy = path.join(root, "copy/t3");
+      const versionsDir = path.join(root, "gcode/versions");
+      const exe = path.join(versionsDir, "1.0.0/gcode");
+      const otherExe = path.join(root, "other/gcode/versions/1.0.0/gcode");
+      const copy = path.join(root, "copy/gcode");
       for (const file of [exe, otherExe, copy]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
         yield* fs.writeFileString(file, "");
       }
-      const ours = path.join(root, "bin/t3");
-      const theirs = path.join(root, "other/bin/t3");
+      const ours = path.join(root, "bin/gcode");
+      const theirs = path.join(root, "other/bin/gcode");
       yield* fs.makeDirectory(path.dirname(ours), { recursive: true });
       yield* fs.makeDirectory(path.dirname(theirs), { recursive: true });
       yield* fs.symlink(exe, ours);
@@ -199,7 +199,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       assert.isUndefined(yield* findOwnedLauncher({ launchedAs: undefined, versionsDir }));
       // A script launcher execs by absolute path, so argv0 names the executable.
       const scriptDir = path.join(root, "script-bin");
-      const script = path.join(scriptDir, "t3");
+      const script = path.join(scriptDir, "gcode");
       yield* fs.makeDirectory(scriptDir);
       yield* fs.writeFileString(script, posixLauncherScript(exe), { mode: 0o755 });
       assert.equal(
@@ -213,7 +213,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
 
       // On Windows, only the shim exactly as written is ours; a user's wrapper stays.
       const shimDir = path.join(root, "win-bin");
-      const shim = path.join(shimDir, "t3.cmd");
+      const shim = path.join(shimDir, "gcode.cmd");
       yield* fs.makeDirectory(shimDir);
       const windowsOwner = (contents: string) =>
         fs
@@ -233,23 +233,23 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       const scriptThroughAlias = path.join(scriptDir, "t3-alias");
       const prunedScript = path.join(scriptDir, "t3-pruned");
       yield* fs.symlink(root, path.join(root, "alias"));
-      yield* fs.symlink(path.join(root, "alias/runtime/versions/1.0.0/t3"), throughAlias);
-      yield* fs.symlink(path.join(versionsDir, "0.9.0/t3"), pruned);
+      yield* fs.symlink(path.join(root, "alias/gcode/versions/1.0.0/gcode"), throughAlias);
+      yield* fs.symlink(path.join(versionsDir, "0.9.0/gcode"), pruned);
       yield* fs.writeFileString(
         scriptThroughAlias,
-        posixLauncherScript(path.join(root, "alias/runtime/versions/1.0.0/t3")),
+        posixLauncherScript(path.join(root, "alias/gcode/versions/1.0.0/gcode")),
         { mode: 0o755 },
       );
       yield* fs.writeFileString(
         prunedScript,
-        posixLauncherScript(path.join(versionsDir, "0.9.0/t3")),
+        posixLauncherScript(path.join(versionsDir, "0.9.0/gcode")),
         { mode: 0o755 },
       );
       // Another program inside a version is not a launcher.
       const sibling = path.join(root, "bin/t3-sibling");
       yield* fs.symlink(path.join(versionsDir, "1.0.0/node"), sibling);
       yield* fs.writeFileString(
-        path.join(root, "runtime/launchers"),
+        path.join(root, "gcode/launchers"),
         [
           ours,
           theirs,
@@ -264,7 +264,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
           path.join(root, "missing"),
         ].join("\n") + "\n",
       );
-      for (const dir of [versionsDir, path.join(root, "alias/runtime/versions")]) {
+      for (const dir of [versionsDir, path.join(root, "alias/gcode/versions")]) {
         assert.deepStrictEqual(yield* findRecordedLaunchers(dir), [
           ours,
           throughAlias,
@@ -275,12 +275,12 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
         ]);
       }
 
-      // On Windows only an unedited t3.cmd is ours; a hand-edited wrapper belongs to the user.
-      const cmd = path.join(root, "bin/t3.cmd");
+      // On Windows only an unedited gcode.cmd is ours; a hand-edited wrapper belongs to the user.
+      const cmd = path.join(root, "bin/gcode.cmd");
       const edited = path.join(root, "bin/edited.cmd");
       yield* fs.writeFileString(cmd, `@echo off\r\n"${exe}" %*`);
       yield* fs.writeFileString(edited, `@echo off\r\nset "T3CODE_HOME=D:\\other"\r\n"${exe}" %*`);
-      yield* fs.writeFileString(path.join(root, "runtime/launchers"), `${cmd}\r\n${edited}\r\n`);
+      yield* fs.writeFileString(path.join(root, "gcode/launchers"), `${cmd}\r\n${edited}\r\n`);
       assert.deepStrictEqual(
         yield* findRecordedLaunchers(versionsDir).pipe(
           Effect.provideService(HostProcess.Platform, "win32"),
@@ -298,9 +298,9 @@ it.live.runIf(HostProcess.Platform.defaultValue() === "win32")(
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-uninstall-" });
-      const runtimeDir = path.join(root, "t3 home %COMSPEC% !COMSPEC! & data", "runtime");
+      const runtimeDir = path.join(root, "t3 home %COMSPEC% !COMSPEC! & data", "gcode");
       yield* fs.makeDirectory(path.join(runtimeDir, "versions", "1.0.0"), { recursive: true });
-      yield* fs.writeFileString(path.join(runtimeDir, "versions", "1.0.0", "t3.exe"), "");
+      yield* fs.writeFileString(path.join(runtimeDir, "versions", "1.0.0", "gcode.exe"), "");
 
       // The directory `t3 uninstall` is run from holds its own `ping`, which must stay unused.
       const marker = path.join(root, "ping-ran.txt");

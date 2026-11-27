@@ -38,7 +38,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("renderPrivileg
         "[Service]\nMemoryLow=2G\nOOMScoreAdjust=-900\n",
       );
       expect(theo.managerDefaults.path).toBe(
-        "/home/theo/.config/systemd/user.conf.d/90-t3code-protect.conf",
+        "/home/theo/.config/systemd/user.conf.d/90-gcode-protect.conf",
       );
       expect(theo.oomUnits).toEqual(["user@1000.service", "tailscaled.service", "ssh.service"]);
 
@@ -79,7 +79,7 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("renderPrivileg
         expect(result.status).toBe(0);
       };
       const exists = (unit: string) =>
-        NodeFS.existsSync(NodePath.join(systemUnitDir, `${unit}.d`, "90-t3code-protect.conf"));
+        NodeFS.existsSync(NodePath.join(systemUnitDir, `${unit}.d`, "90-gcode-protect.conf"));
 
       runScript(theo, "apply");
       runScript(plan(1001, []), "apply");
@@ -233,7 +233,7 @@ it.effect("counts memory.min as protection and names the first cgroup that grant
     "user-1000.slice",
     "user@1000.service",
     "app.slice",
-    "t3code.service",
+    "gcode.service",
   ];
   const write = (depth: number, file: string, value: string) => {
     const directory = NodePath.join(root, ...controlGroup.slice(0, depth));
@@ -290,7 +290,7 @@ it.effect(
       Effect.provideService(
         ProcessRunner.ProcessRunner,
         runner(
-          "ControlGroup=/user.slice/user-1000.slice/user@1000.service/app.slice/t3code.service\nMainPID=0\n",
+          "ControlGroup=/user.slice/user-1000.slice/user@1000.service/app.slice/gcode.service\nMainPID=0\n",
         ),
       ),
       Effect.provide(NodeServices.layer),

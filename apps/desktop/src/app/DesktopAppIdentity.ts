@@ -1,3 +1,4 @@
+import { T3_CODE_UPSTREAM_TAG } from "@t3tools/shared/buildProvenance";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -6,8 +7,10 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { msg } from "gt-i18n";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
+import { m } from "../i18n/messages.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopUserData from "./DesktopUserData.ts";
@@ -95,10 +98,14 @@ export const make = Effect.gen(function* () {
     yield* electronApp.setName(
       `${environment.branding.baseName} ${environment.branding.stageLabel}`,
     );
+    const revision = Option.getOrElse(commitHash, () => "unknown");
+    const upstream = T3_CODE_UPSTREAM_TAG
+      ? m(msg("Based on T3 Code {version}"), { version: T3_CODE_UPSTREAM_TAG })
+      : null;
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,
       applicationVersion: environment.appVersion,
-      version: Option.getOrElse(commitHash, () => "unknown"),
+      version: upstream ? `${upstream} · ${revision}` : revision,
     });
 
     if (environment.platform === "win32") {
