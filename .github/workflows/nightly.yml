@@ -31,6 +31,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       upstream_commit: ${{ steps.version.outputs.upstream_commit }}
+      upstream_tag: ${{ steps.version.outputs.upstream_tag }}
       clerk_publishable_key: ${{ steps.connect.outputs.clerk_publishable_key }}
       clerk_jwt_template: ${{ steps.connect.outputs.clerk_jwt_template }}
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
@@ -80,6 +81,7 @@ jobs:
           fi
           {
             echo "upstream_commit=$upstream"
+            echo "upstream_tag=$tag"
             echo "tag=$tag"
             echo "version=${tag#v}"
           } >> "$GITHUB_OUTPUT"
@@ -106,6 +108,7 @@ jobs:
       T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
       T3CODE_RELAY_URL: ${{ needs.preflight.outputs.relay_url }}
       T3CODE_TELEMETRY_CHANNEL: dev
+      GCODE_UPSTREAM_TAG: ${{ needs.preflight.outputs.upstream_tag }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -172,6 +175,7 @@ jobs:
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
+      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
       ref: ${{ inputs.ref }}
       release_channel: nightly
       relay_client_tracing: false
@@ -194,6 +198,7 @@ jobs:
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
+      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
       ref: ${{ inputs.ref }}
       release_channel: nightly
       relay_client_tracing: false
@@ -216,6 +221,7 @@ jobs:
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
+      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
       ref: ${{ inputs.ref }}
       release_channel: nightly
       relay_client_tracing: false
@@ -237,6 +243,7 @@ jobs:
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
+      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
       ref: ${{ inputs.ref }}
       release_channel: nightly
       relay_client_tracing: false
@@ -259,6 +266,7 @@ jobs:
     uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@dev/main
     with:
       version: ${{ needs.preflight.outputs.version }}
+      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
       ref: ${{ inputs.ref }}
       release_channel: nightly
       relay_client_tracing: false
@@ -331,7 +339,7 @@ jobs:
       - working-directory: release-assets
         run: |
           shopt -s nullglob
-          archives=(t3-*.tar.gz t3-*.zip)
+          archives=(gcode-*.tar.gz gcode-*.zip)
           (( ${#archives[@]} > 0 )) || { echo "No CLI archives were produced." >&2; exit 1; }
           sha256sum "${archives[@]}" > SHA256SUMS
 

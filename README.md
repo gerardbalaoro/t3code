@@ -18,7 +18,7 @@ Install and sign in to at least one supported coding agent before starting your 
 
 ## Command Line
 
-In the desktop app, open **Settings → About → t3 command** to install the CLI. To install it directly on macOS or Linux, run this command.
+In the desktop app, open **Settings → About → gcode command** to install the CLI. To install it directly on macOS or Linux, run this command.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/main/scripts/install.sh | sh
@@ -30,7 +30,10 @@ On Windows, run the installer in PowerShell.
 irm https://raw.githubusercontent.com/gerardbalaoro/t3code/dev/main/scripts/install.ps1 | iex
 ```
 
-Run `t3` to start G Code. Use `t3 update` to install newer G Code CLI builds.
+Run `gcode` to start G Code. Use `gcode update` to install newer G Code CLI builds.
+
+G Code keeps your existing projects, threads, and server settings in `~/.t3`.
+T3 Code and G Code can share that data one at a time. If a T3 Code background service is running, use `t3 service uninstall` before opening G Code Desktop or running `gcode service install`.
 
 ## About
 
