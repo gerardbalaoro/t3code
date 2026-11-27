@@ -59,7 +59,7 @@ export class OlderBootServiceError extends Schema.TaggedError<OlderBootServiceEr
   override readonly [Runtime.errorExitCode] = SERVER_EXIT_CODE_STATE_DIR_OWNED;
 
   override get message(): string {
-    return `A G Code background service set up for ${this.baseDir} may still run a release without the ownership lock. On that machine, try \`t3 update\` and let it restart (or run \`t3 service restart\` if the update is already installed). If the older launcher cannot update, run \`t3 service uninstall\`, then reinstall with \`t3 service install\` from a current CLI. You can also leave the service uninstalled. Pass \`--base-dir ${this.baseDir}\` to each command, and use \`npx t3@latest\` if \`t3\` is not installed or is outdated. Then retry. No server was stopped.`;
+    return `A G Code background service set up for ${this.baseDir} may still run a release without the ownership lock. On that machine, try \`gcode update\` and let it restart (or run \`gcode service restart\` if the update is already installed). If the older launcher cannot update, install the current G Code CLI. Run \`gcode service uninstall\`, then run \`gcode service install\` if you want to keep using the service. Pass \`--base-dir ${this.baseDir}\` to each command. Then retry. No server was stopped.`;
   }
 }
 

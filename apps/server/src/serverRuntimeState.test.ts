@@ -43,7 +43,7 @@ const startBesideBootService = Effect.fn("test.startBesideBootService")(function
   for (const home of [t3Home, serviceHome]) {
     yield* fs.makeDirectory(path.join(home, "userdata"), { recursive: true });
   }
-  yield* fs.makeDirectory(path.join(serviceHome, "runtime"));
+  yield* fs.makeDirectory(path.join(serviceHome, "gcode"));
   const activeVersion = input.activeVersion ?? "0.0.42";
   if (!input.missingServiceState) {
     yield* fs.writeFileString(
