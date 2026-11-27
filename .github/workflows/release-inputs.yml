@@ -1,0 +1,71 @@
+name: G Code release inputs
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "8,23,38,53 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Check release inputs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm test
+      - name: Validate changes to release inputs
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files="$(git diff --name-only "$BASE" HEAD)"
+          if grep -qE '^release/versions/' <<< "$files"; then
+            node release/version.mjs verify
+            record="release/versions/$(jq -r .version package.json).json"
+            candidate="$(mktemp -d)"
+            node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "" "$record"
+            test -f "$candidate/.github/workflows/gcode-build.yml"
+          elif grep -qE '^(release/source\.json|release/upstream/|\.changeset/.*\.md$)' <<< "$files"; then
+            git update-ref refs/heads/main "$BASE"
+            npm ci --ignore-scripts
+            node release/version.mjs validate
+            candidate="$(mktemp -d)"
+            source="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
+            printf 'Assembled source: `%s`\n' "$source" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  discover:
+    name: Check for an upstream nightly
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Compare the approved base with upstream
+        run: |
+          latest="$(git ls-remote --tags --refs https://github.com/pingdotgg/t3code.git 'v*-nightly.*' |
+            sed 's|.*refs/tags/||' | sort -V | tail -n 1)"
+          [[ -n "$latest" ]]
+          approved="$(jq -r .upstream.tag release/source.json)"
+          {
+            echo "Approved T3 Code base: $approved"
+            echo "Latest T3 Code nightly: $latest"
+            if [[ "$latest" != "$approved" ]]; then
+              echo "Open a dev/* PR to review this upstream update."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"

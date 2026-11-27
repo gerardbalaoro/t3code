@@ -1,0 +1,64 @@
+name: Assemble G Code release
+
+on:
+  push:
+    branches: [main]
+    paths: ["release/versions/*.json"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Recorded G Code version to assemble, such as 0.2.0
+        required: true
+        type: string
+
+concurrency:
+  group: gcode-assemble
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - id: release
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$VERSION" ]]; then
+            node release/version.mjs verify "$VERSION"
+          else
+            node release/version.mjs verify
+          fi
+      - id: source
+        env:
+          RECORD: ${{ steps.release.outputs.record }}
+        run: |
+          candidate="$(mktemp -d)"
+          node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "" "$RECORD"
+          echo "directory=$candidate" >> "$GITHUB_OUTPUT"
+      # An App push triggers the build workflow on dev/main.
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Push the assembled release to dev/main
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          RECORD: ${{ steps.release.outputs.record }}
+          NOTES: ${{ steps.release.outputs.notes }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.release.outputs.previous_tag }}
+        run: bash release/push-build.sh

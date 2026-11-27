@@ -1,0 +1,79 @@
+name: Prepare G Code release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gcode-version
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - id: pending
+        run: echo "count=$(node release/version.mjs pending)" >> "$GITHUB_OUTPUT"
+      - id: source
+        if: steps.pending.outputs.count != '0'
+        run: |
+          npm ci --ignore-scripts
+          node release/version.mjs validate
+          candidate="$(mktemp -d)"
+          source="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
+          node release/version.mjs prepare
+          npm install --package-lock-only --ignore-scripts --offline
+          node release/version.mjs verify
+          echo "directory=$candidate" >> "$GITHUB_OUTPUT"
+          echo "commit=$source" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+      - id: app
+        if: steps.pending.outputs.count != '0'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Retain patch inputs and open the release PR
+        if: steps.pending.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          VERSION: ${{ steps.source.outputs.version }}
+        run: bash release/open-release-pr.sh
+
+      # Retaining an application commit can register upstream workflows in the
+      # fork. Keep the G Code build and its reusable packaging workflow.
+      - name: Keep upstream workflows off in the fork
+        if: ${{ !cancelled() && steps.app.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          SOURCE: ${{ steps.source.outputs.commit }}
+        run: |
+          gh workflow list --repo "$GITHUB_REPOSITORY" --limit 300 --json id,path,state \
+            --jq '.[] | select(.state == "active") | [.id, .path] | @tsv' |
+          while IFS=$'\t' read -r id workflow; do
+            if [[ "$workflow" != ".github/workflows/release-desktop.yml" &&
+                  "$workflow" != ".github/workflows/gcode-build.yml" ]] &&
+               git -C "$SOURCE_DIR" cat-file -e "$SOURCE:$workflow" 2>/dev/null &&
+               ! git cat-file -e "HEAD:$workflow" 2>/dev/null; then
+              gh workflow disable "$id" --repo "$GITHUB_REPOSITORY"
+              echo "Disabled $workflow"
+            fi
+          done
