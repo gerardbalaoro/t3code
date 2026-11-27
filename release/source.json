@@ -1,18 +1,19 @@
 {
   "upstream": {
-    "tag": "v0.1.13-nightly.20261125.5258",
-    "commit": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7"
+    "tag": "v0.1.14-nightly.20261127.5345",
+    "commit": "4c72563d949f4aa022c7b10e5c2fea3464e17a9d"
   },
   "patches": [
     {
-      "branch": "feature/create-files",
-      "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
-      "commit": "c6641b1075aeed042e7f536d7cc4a1f186e6e7ca"
+      "branch": "feature/create-files-nightly",
+      "base": "4c72563d949f4aa022c7b10e5c2fea3464e17a9d",
+      "commit": "10a69ed9fa5fc65729b813e427ce0a0cece99351"
     },
     {
       "branch": "dev/patch",
-      "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
-      "commit": "d872cf80d095e655b7c8f6c7a43b8c129137a32d"
+      "parent": "feature/create-files-nightly",
+      "base": "10a69ed9fa5fc65729b813e427ce0a0cece99351",
+      "commit": "2542a1b3ea6bf0f6393341f9a6f4620cda0bb7ef"
     }
   ]
 }
