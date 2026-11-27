@@ -75,9 +75,9 @@ interface ManagedChild {
 }
 
 const runtimePaths = (baseDir: string, version: string) => {
-  const versionDir = NodePath.join(baseDir, "runtime", "versions", version);
+  const versionDir = NodePath.join(baseDir, "gcode", "versions", version);
   // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
-  const executableName = process.platform === "win32" ? "t3.exe" : "t3";
+  const executableName = process.platform === "win32" ? "gcode.exe" : "gcode";
   return {
     versionDir,
     entryPath: NodePath.join(versionDir, executableName),
@@ -204,7 +204,7 @@ async function serviceUnitFromEnvironment(
   if (unitName.endsWith(".xml")) {
     const localAppData = env.LOCALAPPDATA?.trim();
     if (!localAppData) return undefined;
-    const path = NodePath.win32.join(localAppData, "t3code", unitName);
+    const path = NodePath.win32.join(localAppData, "gcode", unitName);
     const taskName = serviceTaskName(env.USERDOMAIN ?? "", env.USERNAME ?? "");
     return { path, reload: () => registerServiceTask(path, taskName) };
   }
@@ -257,9 +257,9 @@ async function serviceUnitFromEnvironment(
 // Only the version segment changes, so quoted or escaped paths stay as rendered.
 // The launch agent's PATH names a versions directory without the executable; leave it.
 const SERVICE_UNIT_PROGRAMS = [
-  /^(ExecStart=.*?[\\/]runtime[\\/]versions[\\/])([^\\/\s"]+)([\\/]t3)(?=["\s])/m,
-  /(<string>[^<]*?[\\/]runtime[\\/]versions[\\/])([^\\/<]+)([\\/]t3<\/string>\s*<string>__service-launcher<\/string>)/,
-  /(<Arguments>--headless "[^"<]*?[\\/]runtime[\\/]versions[\\/])([^\\/"<]+)([\\/]t3\.exe" "__service-launcher")/,
+  /^(ExecStart=.*?[\\/]gcode[\\/]versions[\\/])([^\\/\s"]+)([\\/]gcode)(?=["\s])/m,
+  /(<string>[^<]*?[\\/]gcode[\\/]versions[\\/])([^\\/<]+)([\\/]gcode<\/string>\s*<string>__service-launcher<\/string>)/,
+  /(<Arguments>--headless "[^"<]*?[\\/]gcode[\\/]versions[\\/])([^\\/"<]+)([\\/]gcode\.exe" "__service-launcher")/,
 ] as const;
 
 /**
@@ -317,7 +317,7 @@ const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
 const RESTORE_MARKER = ".restore-pending";
 
 const databaseBackupDir = (baseDir: string, updateId: string) =>
-  NodePath.join(baseDir, "runtime", "db-backup", updateId);
+  NodePath.join(baseDir, "gcode", "db-backup", updateId);
 
 const databaseBackupFile = (backupDir: string, suffix: (typeof DB_FILE_SUFFIXES)[number]) =>
   NodePath.join(backupDir, suffix === "" ? "database" : `database${suffix}`);
@@ -494,7 +494,7 @@ export async function databaseBackupBlocker(
   probe: Partial<BackupSpaceProbe> = {},
 ): Promise<string | undefined> {
   const { readFreeBytes, canClone } = { ...filesystemBackupSpaceProbe, ...probe };
-  const backupRoot = NodePath.join(baseDir, "runtime", "db-backup");
+  const backupRoot = NodePath.join(baseDir, "gcode", "db-backup");
   await NodeFSP.mkdir(backupRoot, { recursive: true, mode: 0o700 });
   if (await isNoCopyOnWrite(dbPath)) await markNoCopyOnWrite(backupRoot);
   await removeAbandonedBackupCopies(backupRoot);
@@ -804,10 +804,10 @@ async function terminateChild(
 }
 
 /** Task Scheduler names are machine-wide, so each Windows account runs its own task. */
-export const serviceTaskName = (domain: string, userName: string) => `t3code-${domain}-${userName}`;
+export const serviceTaskName = (domain: string, userName: string) => `gcode-${domain}-${userName}`;
 
 export const serviceLauncherLockPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_LAUNCHER_LOCK_FILE);
+  NodePath.join(baseDir, "gcode", SERVICE_LAUNCHER_LOCK_FILE);
 
 // An exclusive SQLite transaction, like the server's owner lock: the OS drops it when the holder dies.
 async function tryAcquireSqliteLock(
@@ -834,7 +834,7 @@ export async function serviceLauncherIsRunning(lockPath: string): Promise<boolea
 }
 
 const servingLockPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_SERVING_LOCK_FILE);
+  NodePath.join(baseDir, "gcode", SERVICE_SERVING_LOCK_FILE);
 
 /** Whether a launcher has, or is about to start, a server for this home. An idle one does not. */
 export const serviceLauncherIsServing = (baseDir: string): Promise<boolean> =>
@@ -896,9 +896,9 @@ export async function stateDirOwned(baseDir: string): Promise<boolean> {
 }
 
 const stopMarkerPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_STOP_MARKER_FILE);
+  NodePath.join(baseDir, "gcode", SERVICE_STOP_MARKER_FILE);
 const restartPendingPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
+  NodePath.join(baseDir, "gcode", SERVICE_RESTART_PENDING_FILE);
 
 export class Launcher {
   readonly #baseDir: string;
@@ -947,7 +947,7 @@ export class Launcher {
     this.#lockPath = options.lockPath;
     // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
     this.#stopChildOverIpc = options.stopChildOverIpc ?? process.platform === "win32";
-    this.#statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
+    this.#statePath = NodePath.join(baseDir, "gcode", SERVICE_STATE_FILE);
     this.#state = state;
   }
 
@@ -1218,7 +1218,7 @@ export class Launcher {
     )
       return;
     if (!(await runtimeExists(this.#baseDir, version))) {
-      throw new Error(`Selected t3@${version} runtime is missing or incomplete.`);
+      throw new Error(`Selected gcode ${version} runtime is missing or incomplete.`);
     }
     if (this.#stopping) return;
     const paths = runtimePaths(this.#baseDir, version);
@@ -1442,7 +1442,7 @@ export class Launcher {
       }
     } catch (error) {
       process.stderr.write(
-        `[service-launcher] Could not point ${unit.path} at t3@${version}: ${error instanceof Error ? error.message : String(error)}\n`,
+        `[service-launcher] Could not point ${unit.path} at gcode ${version}: ${error instanceof Error ? error.message : String(error)}\n`,
       );
     }
   }
@@ -1607,14 +1607,14 @@ export async function main(options: LauncherOptions = {}): Promise<void> {
       ...(options.serviceUnit === undefined ? {} : { [SERVICE_UNIT_ENV]: options.serviceUnit }),
     };
     const environment = await readServiceEnvironment(baseDir, managerEnvironment);
-    const statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
+    const statePath = NodePath.join(baseDir, "gcode", SERVICE_STATE_FILE);
     const contents = await NodeFSP.readFile(statePath, "utf8");
     let state = parseServiceState(contents);
     if (state === undefined) {
       state = adoptLegacyServiceState(contents);
       if (state === undefined) throw new Error("Service state is invalid or unsupported.");
       if (!(await runtimeExists(baseDir, state.activeVersion))) {
-        throw new Error(`Selected t3@${state.activeVersion} runtime is missing or incomplete.`);
+        throw new Error(`Selected gcode ${state.activeVersion} runtime is missing or incomplete.`);
       }
     }
     const serviceUnit = await serviceUnitFromEnvironment(managerEnvironment);

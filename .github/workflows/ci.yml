@@ -211,7 +211,7 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           node apps/server/scripts/cli.ts build-exe
-          apps/server/dist-exe/t3 --version
+          apps/server/dist-exe/gcode --version
 
       # The release launch check, run unpackaged against the same old-state fixture, for
       # startup and sidebar changes. Packaging and signing stay release-only.

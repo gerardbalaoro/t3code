@@ -770,7 +770,7 @@ describe("DesktopUpdates", () => {
 
         assert.isTrue((yield* updates.install).accepted);
         assert.deepEqual(markersAtStop, [
-          environment.path.join(environment.baseDir, "runtime", DESKTOP_UPDATE_RESTART_MARKER_FILE),
+          environment.path.join(environment.baseDir, "gcode", DESKTOP_UPDATE_RESTART_MARKER_FILE),
         ]);
         // SSH launchers wait on this until the replacement backend publishes its runtime.
         assert.deepEqual(JSON.parse(inProgressAtStop ?? "null"), {

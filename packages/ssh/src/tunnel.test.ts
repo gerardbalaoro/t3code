@@ -228,7 +228,12 @@ describe("ssh tunnel scripts", () => {
       const fs = yield* FileSystem.FileSystem;
       const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ssh-launch-log-" });
       const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
-      const stateDir = NodePath.join(home, ".t3", "ssh-launch", yield* remoteStateKey(target));
+      const stateDir = NodePath.join(
+        home,
+        ".t3",
+        "gcode-ssh-launch",
+        yield* remoteStateKey(target),
+      );
       const bin = NodePath.join(home, "bin");
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.makeDirectory(bin);
@@ -370,8 +375,8 @@ describe("ssh tunnel scripts", () => {
           { mode: 0o755 },
         );
         NodeFS.writeFileSync(
-          NodePath.join(bin, "t3"),
-          `#!/bin/sh\ncase "$1" in --version) echo "t3 v${installed}"; exit ${status} ;; *) echo "host t3 $*" ;; esac\n`,
+          NodePath.join(bin, "gcode"),
+          `#!/bin/sh\ncase "$1" in --version) echo "gcode v${installed}"; exit ${status} ;; *) echo "host t3 $*" ;; esac\n`,
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
@@ -404,14 +409,14 @@ describe("ssh tunnel scripts", () => {
       const bin = NodePath.join(root, "bin");
       const release = NodePath.join(root, "release");
       const home = NodePath.join(root, "home\ncache");
-      const archive = `t3-${ARCHIVE.archiveVersion}-linux-x64.tar.gz`;
+      const archive = `gcode-${ARCHIVE.archiveVersion}-linux-x64.tar.gz`;
       NodeFS.mkdirSync(bin);
       NodeFS.mkdirSync(home);
-      NodeFS.mkdirSync(NodePath.join(release, "t3"), { recursive: true });
-      NodeFS.writeFileSync(NodePath.join(release, "t3", "t3"), "#!/bin/sh\necho ok\n", {
+      NodeFS.mkdirSync(NodePath.join(release, "gcode"), { recursive: true });
+      NodeFS.writeFileSync(NodePath.join(release, "gcode", "gcode"), "#!/bin/sh\necho ok\n", {
         mode: 0o755,
       });
-      NodeChildProcess.execFileSync("tar", ["-czf", archive, "t3"], { cwd: release });
+      NodeChildProcess.execFileSync("tar", ["-czf", archive, "gcode"], { cwd: release });
       NodeChildProcess.execFileSync("sh", ["-c", `sha256sum ${archive} > SHA256SUMS`], {
         cwd: release,
       });
@@ -1318,7 +1323,7 @@ describe("ssh tunnel scripts", () => {
 child.on("exit", (code) => process.exit(code ?? 1));`,
         );
         // A launch that died holding the lock must not block or double-admit later ones.
-        const launchLock = path.join(home, ".t3", "ssh-launch", ".launch.lock");
+        const launchLock = path.join(home, ".t3", "gcode-ssh-launch", ".launch.lock");
         yield* fs.makeDirectory(path.dirname(launchLock), { recursive: true });
         yield* fs.writeFileString(launchLock, "999999999\n");
         const targets = [
@@ -1350,7 +1355,7 @@ child.on("exit", (code) => process.exit(code ?? 1));`,
           if (launch.remoteServerKind !== "managed") continue;
           const stateKey = yield* remoteStateKey(targets[index]!);
           const recordedPid = yield* fs.readFileString(
-            path.join(home, ".t3", "ssh-launch", stateKey, "pid"),
+            path.join(home, ".t3", "gcode-ssh-launch", stateKey, "pid"),
           );
           assert.equal(
             Number(recordedPid.trim()),
@@ -1453,7 +1458,7 @@ server.listen(Number(flag("--port") ?? 0), "127.0.0.1", () => {
         holderPort,
         sshAsLocalShell,
         staleId: staleId === "an unrelated process" ? holder.pid : tid,
-        stateDir: `${home}/.t3/ssh-launch/${yield* remoteStateKey(target)}`,
+        stateDir: `${home}/.t3/gcode-ssh-launch/${yield* remoteStateKey(target)}`,
       };
     });
 
@@ -1816,20 +1821,20 @@ const canBind = (port) =>
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-archive-launch-" });
       const home = `${root}/home`;
-      const stateDir = `${home}/.t3/ssh-launch/test-state`;
+      const stateDir = `${home}/.t3/gcode-ssh-launch/test-state`;
       const fakeT3 = `${root}/fake-t3.cjs`;
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.writeFileString(`${stateDir}/port`, `${yield* freeLoopbackPort}\n`);
       yield* fs.writeFileString(fakeT3, FAKE_T3);
       for (const version of versions) {
-        const runtimeDir = `${home}/.t3/runtime/versions/${version}`;
+        const runtimeDir = `${home}/.t3/gcode/versions/${version}`;
         yield* fs.makeDirectory(runtimeDir, { recursive: true });
         // The runner gets only HOME, so `node` would resolve on sh's default PATH, which may not have it.
         yield* fs.writeFileString(
-          `${runtimeDir}/t3`,
+          `${runtimeDir}/gcode`,
           `#!/bin/sh\nexec '${process.execPath}' '${fakeT3}' '${version}' "$@"\n`,
         );
-        yield* fs.chmod(`${runtimeDir}/t3`, 0o755);
+        yield* fs.chmod(`${runtimeDir}/gcode`, 0o755);
         yield* fs.writeFileString(`${runtimeDir}/.install-complete`, `${version}\n`);
       }
       const readManagedPid = fs
@@ -1888,7 +1893,7 @@ const canBind = (port) =>
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dangling-home-" });
       const home = `${root}/home`;
-      const target = `${root}/shared/t3`;
+      const target = `${root}/shared/gcode`;
       yield* fs.makeDirectory(home, { recursive: true });
       yield* fs.symlink(target, `${home}/.t3`);
       const launch = `${root}/launch.sh`;
@@ -1896,12 +1901,12 @@ const canBind = (port) =>
         launch,
         SshTunnel.buildRemoteLaunchScript({
           archiveVersion: "0.1.6",
-          releaseBaseUrl: "http://127.0.0.1:9",
+          releaseBaseUrl: `file://${root}/missing-release`,
         }),
       );
       const result = yield* runScript(home, [launch, "test-state"]);
       assert.notInclude(result.stderr, "File exists");
-      assert.isTrue(yield* fs.exists(`${target}/ssh-launch/test-state`), result.stderr);
+      assert.isTrue(yield* fs.exists(`${target}/gcode-ssh-launch/test-state`), result.stderr);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

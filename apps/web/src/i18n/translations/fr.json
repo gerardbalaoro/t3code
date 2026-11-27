@@ -1,4 +1,8 @@
 {
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Commande gcode",
+  "ccf9b9f3089a07b2": "Échec du chargement de l’état de la commande gcode.",
   "4bcfa3b976a421cf": "Discussion annexe",
   "23be753133ae6950": "Fil",
   "0001ae5846061bb6": "Fil sur {machine}",
@@ -7358,6 +7362,7 @@
   "60b53cc903821cbb": "Impossible de copier la version dans le presse-papiers.",
   "0cb463936215a3cc": "Impossible de copier la version",
   "6d521d61ed177169": "Copier la version {version}",
+  "25654c1fb38a3107": "Basé sur T3 Code {version}",
   "18040c4f55f3b533": "Version",
   "fd1d2853467e6195": "Copier la version",
   "5498f2f33907b02c": "L’ACP n’a pas pu être préparé.",

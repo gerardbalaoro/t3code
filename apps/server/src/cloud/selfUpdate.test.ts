@@ -49,7 +49,7 @@ const releaseHttpClient = (order: string[], urls: string[], beforeDownload?: Eff
         ).join("");
         return HttpClientResponse.fromWeb(
           request,
-          new Response(`${hex}  t3-1.1.0-linux-x64.tar.gz\n`),
+          new Response(`${hex}  gcode-1.1.0-linux-x64.tar.gz\n`),
         );
       }
       if (beforeDownload) yield* beforeDownload;
@@ -87,7 +87,9 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           order.push("extract");
           const stagingDir = input.args[input.args.indexOf("-C") + 1];
           if (stagingDir === undefined) return yield* Effect.die("missing tar target");
-          yield* fs.writeFileString(path.join(stagingDir, "t3"), "#!/bin/sh\n").pipe(Effect.orDie);
+          yield* fs
+            .writeFileString(path.join(stagingDir, "gcode"), "#!/bin/sh\n")
+            .pipe(Effect.orDie);
           return {
             stdout: "",
             stderr: "",
@@ -213,7 +215,7 @@ it.layer(NodeServices.layer)("server self update", (it) => {
       expect(order).toEqual([]);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      expect(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions"))).toEqual([]);
+      expect(yield* fs.readDirectory(path.join(baseDir, "gcode", "versions"))).toEqual([]);
       failDownload = false;
       expect((yield* selfUpdate.update({ targetVersion: "1.1.0" })).updateId).toBe("launcher-id");
       expect(order).toEqual(["extract", "preflight", "accept"]);
@@ -234,7 +236,7 @@ it.layer(NodeServices.layer)("server self update", (it) => {
       const path = yield* Path.Path;
       expect(
         JSON.parse(
-          yield* fs.readFileString(path.join(baseDir, "runtime", "desktop-update-in-progress")),
+          yield* fs.readFileString(path.join(baseDir, "gcode", "desktop-update-in-progress")),
         ),
       ).toEqual({ startedAt: 5_000, expiresAt: 65_000 });
     }),
@@ -460,12 +462,12 @@ it.layer(NodeServices.layer)("pruning runtimes on start", (it) => {
     const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-prune-on-start-" });
     const realHome = path.join(tempDir, "home");
     const baseDir = input.symlinkedHome ? path.join(tempDir, "linked-home") : realHome;
-    const versionsDir = path.join(baseDir, "runtime", "versions");
+    const versionsDir = path.join(baseDir, "gcode", "versions");
     yield* TestClock.setTime(24 * 60 * 60 * 1000);
     for (const version of [staleVersion, packageJson.version]) {
-      const directory = path.join(realHome, "runtime", "versions", version);
+      const directory = path.join(realHome, "gcode", "versions", version);
       yield* fs.makeDirectory(directory, { recursive: true });
-      yield* fs.writeFileString(path.join(directory, "t3"), "");
+      yield* fs.writeFileString(path.join(directory, "gcode"), "");
       const sentinel = path.join(directory, ".install-complete");
       yield* fs.writeFileString(sentinel, `${version}\n`);
       yield* fs.utimes(sentinel, 0, 0);
@@ -479,16 +481,22 @@ it.layer(NodeServices.layer)("pruning runtimes on start", (it) => {
         ? path.join(tempDir, "alias-home")
         : baseDir;
       if (input.servicePlistThroughLink) yield* fs.symlink(realHome, programHome);
-      const program = path.join(programHome, "runtime", "versions", input.servicePlistStarts, "t3");
+      const program = path.join(
+        programHome,
+        "gcode",
+        "versions",
+        input.servicePlistStarts,
+        "gcode",
+      );
       yield* fs.writeFileString(
-        path.join(agentsDir, "com.t3tools.t3code.service.plist"),
+        path.join(agentsDir, "io.github.gerardbalaoro.gcode.service.plist"),
         `<plist><dict>\n<key>ProgramArguments</key>\n<array>\n<string>${program}</string>\n<string>__service-launcher</string>\n</array>\n</dict></plist>\n`,
       );
     }
     // Like `process.execPath`, the running runtime is reported by its real path.
     const executablePath =
       input.executable === "own runtime"
-        ? yield* fs.realPath(path.join(versionsDir, packageJson.version, "t3"))
+        ? yield* fs.realPath(path.join(versionsDir, packageJson.version, "gcode"))
         : "/usr/local/bin/node";
     const removed = yield* ServerSelfUpdate.pruneRuntimesOnStart({
       baseDir,
