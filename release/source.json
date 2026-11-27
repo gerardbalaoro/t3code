@@ -12,13 +12,7 @@
     {
       "branch": "dev/patch",
       "base": "bf961f8121c6336915ecf7b3f97ce6e68ab38fd7",
-      "commit": "354254423b6d723f728a8482d42a1861bd526d4c"
-    },
-    {
-      "branch": "feat/gcode-distribution",
-      "parent": "dev/patch",
-      "base": "354254423b6d723f728a8482d42a1861bd526d4c",
-      "commit": "6387b0937f2b0853ff82c3e5cef5578953e1d99f"
+      "commit": "ea426372de003db73df09b8b02a55a226bef5cba"
     }
   ]
 }

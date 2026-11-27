@@ -11,7 +11,6 @@ const releaseDir = new URL("./", import.meta.url);
 const root = new URL("../", import.meta.url);
 const notesPath = (version) => new URL(`versions/${version}.md`, releaseDir);
 const recordPath = (version) => new URL(`versions/${version}.json`, releaseDir);
-const sourcePath = new URL("source.json", releaseDir);
 const changelog = new URL("../CHANGELOG.md", import.meta.url);
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -94,10 +93,10 @@ function upstreamHighlights(upstreamTag, oldVersion) {
     .filter(Boolean).join("\n\n");
 }
 
-function prepare(commit) {
-  if (!shaPattern.test(commit)) throw new Error("Supply the full assembled commit SHA.");
+function prepare() {
   const { changesets, release } = plan();
-  const { upstream } = readSource();
+  const source = readSource();
+  const { upstream } = source;
   const notes = releaseNotes(changesets, upstream.tag, upstreamHighlights(upstream.tag, release.oldVersion));
   changeset("version");
   const version = readJson(config).version;
@@ -107,9 +106,8 @@ function prepare(commit) {
   const record = {
     version,
     previousVersion: existsSync(recordPath(release.oldVersion)) ? release.oldVersion : null,
-    commit,
     upstream,
-    sourceSha256: sha256(readFileSync(sourcePath)),
+    source,
     notesSha256: sha256(notes),
   };
   writeFileSync(recordPath(version), JSON.stringify(record, null, 2) + "\n", { flag: "wx" });
@@ -127,18 +125,15 @@ function validate() {
 }
 
 function verify(expected) {
-  const { version } = readJson(config);
-  if (!versionPattern.test(version) || (expected && version !== expected)) {
-    throw new Error(`Expected the current G Code version, found ${version}.`);
-  }
-  if (pendingFiles().length) throw new Error("The release PR still has unversioned Changesets.");
+  const version = expected ?? readJson(config).version;
+  if (!versionPattern.test(version)) throw new Error("Expected a G Code release version.");
   const record = readJson(recordPath(version));
-  const { upstream } = readSource();
-  if (record.version !== version || !shaPattern.test(record.commit) ||
+  const { upstream } = record;
+  if (record.version !== version || !nightlyPattern.test(upstream?.tag) || !shaPattern.test(upstream?.commit) ||
+      !Array.isArray(record.source?.patches) ||
       (record.previousVersion !== null &&
         (!versionPattern.test(record.previousVersion) || !existsSync(recordPath(record.previousVersion)))) ||
-      record.upstream.tag !== upstream.tag || record.upstream.commit !== upstream.commit ||
-      record.sourceSha256 !== sha256(readFileSync(sourcePath)) ||
+      record.source.upstream?.tag !== upstream.tag || record.source.upstream?.commit !== upstream.commit ||
       record.notesSha256 !== sha256(readFileSync(notesPath(version)))) {
     throw new Error("The release record disagrees with the source manifest or release notes.");
   }
@@ -146,7 +141,7 @@ function verify(expected) {
     version,
     tag: `v${version}`,
     previous_tag: record.previousVersion ? `v${record.previousVersion}` : "",
-    ref: record.commit,
+    record: `release/versions/${version}.json`,
     upstream_tag: upstream.tag,
     upstream_commit: upstream.commit,
     notes: `release/versions/${version}.md`,
@@ -158,7 +153,7 @@ function verify(expected) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, arg] = process.argv.slice(2);
-  if (command === "prepare") prepare(arg);
+  if (command === "prepare") prepare();
   else if (command === "validate") validate();
   else if (command === "verify") verify(arg);
   else if (command === "pending") console.log(pendingFiles().length);

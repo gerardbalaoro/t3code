@@ -6,10 +6,11 @@
 | --- | --- |
 | `main` | Holds the approved source manifest, release notes, and workflows. |
 | `feature/*` | Holds application features. A feature can build on another feature. |
-| `dev/patch` | Holds distribution changes. |
+| `dev/patch` | Holds distribution changes and the G Code build workflow. |
+| `dev/main` | Holds the assembled app source, build workflow, and release notes for the current build. |
 | `dev/<name>` | Proposes application revisions or an upstream update in a PR to `main`. |
 | `gcode/release` | Holds the release PR generated from pending Changesets. |
-| `gcode/source/*` and `gcode/inputs/*` | Retain assembled commits and patch revisions for release builds and retries. |
+| `gcode/inputs/*` | Retains pinned patch revisions for release assembly. |
 
 Use an application worktree for feature and distribution development.
 
@@ -28,12 +29,13 @@ A PR can bring in several feature revisions and an upstream update together. If 
 ## Build and Release
 
 1. Merge the input PRs you want to ship. [Prepare G Code Release](.github/workflows/gcode-version.yml) opens or updates the release PR.
-2. Review the version, notes, and source record in the release PR. Wait for the source check and all packaging jobs to pass.
-3. Merge the release PR to start [G Code Release](.github/workflows/gcode-release.yml). It builds the recorded commit and publishes the installers, CLI, and updater manifests after verification.
+2. Review its version, notes, and final source instructions. Wait for the source check to pass.
+3. Merge the release PR. [Assemble G Code release](.github/workflows/gcode-release.yml) replays those instructions and force-pushes `dev/main` with a lease.
+4. GitHub builds the pushed commit using the workflow from `dev/patch`. After verification, it tags that commit and publishes the installers, CLI, and updater manifests.
 
-Changesets uses the highest pending bump to assign the next G Code version. The release PR saves the notes once. The workflow puts that Markdown in the GitHub release body and each desktop updater manifest. Build provenance records the exact G Code commit and upstream nightly. The release workflow pins its reusable packaging workflow by commit.
+The release PR saves the notes and source instructions for its version. Changesets that merge later stay pending for the next release.
 
-Publish each recorded release before publishing the next one. Rerun a failed release from its original workflow run. For a build that keeps its assets in Actions, run **G Code Release** on `main` with **publish** unchecked.
+For a failed assembly, rerun its workflow or dispatch **Assemble G Code release** on `main` with the version. For a failed build or publish, rerun the original `dev/main` run. GitHub then uses the same pushed commit. Publish each recorded release before advancing to the next one.
 
 ## Local Checks
 
@@ -51,4 +53,4 @@ node release/assemble.mjs "$candidate" https://github.com/gerardbalaoro/t3code.g
 
 Configure the GitHub App ID in `RELEASE_APP_ID` and its private key in `RELEASE_APP_PRIVATE_KEY`. The app needs Contents, Workflows, and Pull Requests write access.
 
-Require the PR checks before merging. Keep `gcode/source/*`, `gcode/inputs/*`, and published release tags available for retries. Allow the release app to create those refs.
+Require the PR checks before merging. Keep `gcode/inputs/*` and published tags available for retries. Allow the release app to update `dev/main` and create tags. Disable the legacy **Nightly** workflow at cutover.

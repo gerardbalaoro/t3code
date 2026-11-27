@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { assemble } from "./assemble.mjs";
-import { addUpdateNotes } from "./update-notes.mjs";
 import { releaseNotes } from "./version.mjs";
 
 test("release notes preserve Markdown and put upstream last in a fixed order", () => {
@@ -25,10 +24,6 @@ test("release notes preserve Markdown and put upstream last in a fixed order", (
     highlights,
     `[Full T3 Code release notes](https://github.com/pingdotgg/t3code/releases/tag/${tag})\n`,
   ].join("\n\n"));
-  const staged = addUpdateNotes("version: 0.2.0\npath: G-Code.exe\n", "0.2.0", notes);
-  const field = staged.split("\n").find((line) => line.startsWith("releaseNotes: "));
-  assert.equal(JSON.parse(field.slice("releaseNotes: ".length)), notes);
-  assert.throws(() => addUpdateNotes(staged, "0.2.0", notes), /already contains release notes/);
   assert.match(releaseNotes([], tag, ""), /^#### Based on T3 Code /);
   assert.throws(() => releaseNotes([{ id: "no-title", summary: "Add search" }], tag, ""), /level-four heading/);
 });

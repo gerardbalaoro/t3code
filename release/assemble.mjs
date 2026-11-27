@@ -92,7 +92,8 @@ export function assemble(directory, source, origin, upstream = upstreamUrl) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [directory, origin, upstream] = process.argv.slice(2);
+  const [directory, origin, upstream, releaseRecord] = process.argv.slice(2);
   if (!directory || !origin) throw new Error("Usage: node release/assemble.mjs <empty-directory> <fork-url>");
-  console.log(assemble(directory, readSource(), origin, upstream));
+  const source = releaseRecord ? JSON.parse(readFileSync(releaseRecord, "utf8")).source : readSource();
+  console.log(assemble(directory, source, origin, upstream || undefined));
 }

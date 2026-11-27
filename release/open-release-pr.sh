@@ -15,13 +15,12 @@ retain() {
   git -C "$SOURCE_DIR" push "--force-with-lease=$ref:" origin "$sha:$ref"
 }
 
-retain "$SOURCE" source
 while read -r sha; do
   retain "$sha" inputs
 done < <(jq -r '.patches[].commit' release/source.json)
 
 if [[ "$(git ls-remote --refs origin refs/heads/main | cut -f1)" != "$base" ]]; then
-  echo "main advanced during preparation. The next run will use its new head."
+  echo "main advanced during preparation. Rerun Prepare G Code release on main."
   exit 0
 fi
 

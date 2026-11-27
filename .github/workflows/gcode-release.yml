@@ -1,412 +1,64 @@
-name: G Code Release
+name: Assemble G Code release
 
 on:
-  pull_request:
-    branches: [main]
-    paths: ["release/versions/**"]
   push:
     branches: [main]
-    paths: ["release/versions/**"]
+    paths: ["release/versions/*.json"]
   workflow_dispatch:
     inputs:
-      publish:
-        description: Publish the current recorded version after verification
-        type: boolean
-        default: false
+      version:
+        description: Recorded G Code version to assemble, such as 0.2.0
+        required: true
+        type: string
 
 concurrency:
-  group: gcode-release-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  group: gcode-assemble
   cancel-in-progress: false
 
 permissions:
-  # Windows packaging reads this run's artifact list to wait for the Linux CLI.
-  actions: read
   contents: read
 
 jobs:
-  preflight:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    outputs:
-      ref: ${{ steps.version.outputs.ref }}
-      notes: ${{ steps.version.outputs.notes }}
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
-      previous_tag: ${{ steps.version.outputs.previous_tag }}
-      upstream_tag: ${{ steps.version.outputs.upstream_tag }}
-      clerk_publishable_key: ${{ steps.connect.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ steps.connect.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ steps.connect.outputs.relay_url }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - id: version
-        name: Verify the recorded release and its retained source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          node release/version.mjs verify
-          ref="$(sed -n 's/^ref=//p' "$GITHUB_OUTPUT")"
-          retained="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/gcode/source/$ref" --jq .object.sha)"
-          [[ "$retained" == "$ref" ]]
-
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ steps.version.outputs.ref }}
-          persist-credentials: false
-          filter: blob:none
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
-
-      - uses: ./.github/actions/setup-ci-deps
-        env:
-          pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
-
-      # Share the same lockfile verification with every packaging job, as upstream does.
-      - name: Upload dependency verification
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-dependency-verification
-          path: ${{ runner.temp }}/pnpm-metadata/lockfile-verified.jsonl
-
-      # T3 Connect's public production values, as upstream ships them for forks.
-      - id: connect
-        run: |
-          value() { sed -n "s|^T3CODE_$1=||p" .env.example; }
-          {
-            echo "clerk_publishable_key=$(value CLERK_PUBLISHABLE_KEY)"
-            echo "clerk_jwt_template=$(value CLERK_JWT_TEMPLATE)"
-            echo "clerk_cli_oauth_client_id=$(value CLERK_CLI_OAUTH_CLIENT_ID)"
-            echo "relay_url=$(value RELAY_URL)"
-          } | tee -a "$GITHUB_OUTPUT"
-          ! grep -q '=$' "$GITHUB_OUTPUT"
-
-  build_bundle:
-    needs: preflight
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    env:
-      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      T3CODE_CLERK_JWT_TEMPLATE: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      T3CODE_RELAY_URL: ${{ needs.preflight.outputs.relay_url }}
-      T3CODE_TELEMETRY_CHANNEL: dev
-      GCODE_UPSTREAM_TAG: ${{ needs.preflight.outputs.upstream_tag }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
-
-      - name: Download dependency verification
-        continue-on-error: true
-        uses: actions/download-artifact@v8
-        with:
-          name: release-dependency-verification
-          path: ${{ runner.temp }}/pnpm-metadata
-
-      - uses: ./.github/actions/setup-ci-deps
-        with:
-          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
-        env:
-          pnpm_config_cache_dir: ${{ runner.temp }}/pnpm-metadata
-
-      - run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
-
-      - name: Check bundle-only build support
-        id: bundle_build
-        run: |
-          script="$(node -p "require('./package.json').scripts['build:desktop:bundle'] ? 'build:desktop:bundle' : 'build:desktop'")"
-          echo "script=$script" >> "$GITHUB_OUTPUT"
-
-      - if: steps.bundle_build.outputs.script == 'build:desktop'
-        uses: ./.github/actions/setup-apt-mirrors
-
-      - name: Install browser secret helper build libraries
-        if: steps.bundle_build.outputs.script == 'build:desktop'
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
-
-      - name: Build JS bundle
-        run: vp run ${{ steps.bundle_build.outputs.script }}
-
-      - name: Verify CLI version, triage command, and desktop provenance
-        env:
-          VERSION: ${{ needs.preflight.outputs.version }}
-        run: |
-          version="$(node apps/server/dist/bin.mjs --version)"
-          grep -Fx "gcode v$VERSION" <<< "$version"
-          grep -Fx "Based on T3 Code $GCODE_UPSTREAM_TAG" <<< "$version"
-          triage="$(node apps/server/dist/bin.mjs triage --help)"
-          grep -F "gcode triage" <<< "$triage"
-          grep -Fq "$GCODE_UPSTREAM_TAG" apps/desktop/dist-electron/main.cjs
-
-      # Packaging restores this hidden file from the visible copy in the artifact.
-      - name: Stage web asset manifest
-        shell: bash
-        run: |
-          manifest=apps/server/dist/client/.vite/manifest.json
-          if [[ -f "$manifest" ]]; then
-            cp "$manifest" apps/server/dist/client/vite-manifest.release.json
-          fi
-
-      # The artifact root is apps/; packaging jobs download it into apps/.
-      - uses: actions/upload-artifact@v7
-        with:
-          name: js-bundle
-          path: |
-            apps/server/dist
-            apps/desktop/dist-electron
-          if-no-files-found: error
-          retention-days: 1
-
-  # Pin the reusable packaging workflow here. Each job checks out the
-  # separately recorded source SHA, so retries survive moves of dev/main.
-  # Builds are unsigned. To sign, pass the signing secrets by name here.
-  desktop_mac_arm64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      release_channel: stable
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: macOS arm64
-      runner: macos-26
-      platform: mac
-      target: dmg
-      arch: arm64
-      rust_target: aarch64-apple-darwin
-      resource_key: darwin-arm64
-      cli_archive: true
-      launch_check: true
-
-  desktop_linux_x64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      release_channel: stable
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: Linux x64
-      runner: ubuntu-24.04
-      platform: linux
-      target: AppImage
-      arch: x64
-      rust_target: x86_64-unknown-linux-gnu
-      resource_key: linux-x64
-      cli_archive: true
-      launch_check: true
-
-  desktop_linux_arm64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      release_channel: stable
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: Linux arm64
-      runner: ubuntu-24.04-arm
-      platform: linux
-      target: AppImage
-      arch: arm64
-      rust_target: aarch64-unknown-linux-gnu
-      resource_key: linux-arm64
-      cli_archive: true
-
-  desktop_win_x64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      release_channel: stable
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: Windows x64
-      runner: ubuntu-24.04
-      verify_runner: windows-2025
-      platform: win
-      target: nsis
-      arch: x64
-      rust_target: x86_64-pc-windows-msvc
-      resource_key: win32-x64
-      cli_archive: true
-
-  desktop_win_arm64:
-    needs: [preflight, build_bundle]
-    uses: gerardbalaoro/t3code/.github/workflows/release-desktop.yml@6387b0937f2b0853ff82c3e5cef5578953e1d99f
-    with:
-      version: ${{ needs.preflight.outputs.version }}
-      upstream_tag: ${{ needs.preflight.outputs.upstream_tag }}
-      ref: ${{ needs.preflight.outputs.ref }}
-      release_channel: stable
-      relay_client_tracing: false
-      clerk_publishable_key: ${{ needs.preflight.outputs.clerk_publishable_key }}
-      clerk_jwt_template: ${{ needs.preflight.outputs.clerk_jwt_template }}
-      clerk_cli_oauth_client_id: ${{ needs.preflight.outputs.clerk_cli_oauth_client_id }}
-      relay_url: ${{ needs.preflight.outputs.relay_url }}
-      label: Windows arm64
-      runner: ubuntu-24.04
-      verify_runner: windows-11-arm
-      platform: win
-      target: nsis
-      arch: arm64
-      rust_target: aarch64-pc-windows-msvc
-      resource_key: win32-arm64
-      cli_archive: true
-
-  verify_assets:
-    needs:
-      [
-        preflight,
-        desktop_mac_arm64,
-        desktop_linux_x64,
-        desktop_linux_arm64,
-        desktop_win_x64,
-        desktop_win_arm64,
-      ]
+  assemble:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      VERSION: ${{ needs.preflight.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.preflight.outputs.ref }}
           persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
-
-      - uses: ./.github/actions/setup-ci-deps
+      - uses: actions/setup-node@v6
         with:
-          install-args: --filter=@t3tools/scripts...
-
-      - uses: actions/checkout@v6
-        with:
-          path: release-project
-          persist-credentials: false
-
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: desktop-*
-          merge-multiple: true
-          path: release-assets
-
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: cli-*
-          merge-multiple: true
-          path: release-assets
-
-      # Installers verify archives against this file.
-      - working-directory: release-assets
+          node-version: 24
+          package-manager-cache: false
+      - id: release
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          archives=(
-            "gcode-$VERSION-darwin-arm64.tar.gz"
-            "gcode-$VERSION-linux-x64.tar.gz"
-            "gcode-$VERSION-linux-arm64.tar.gz"
-            "gcode-$VERSION-win32-x64.zip"
-            "gcode-$VERSION-win32-arm64.zip"
-          )
-          sha256sum "${archives[@]}" > SHA256SUMS
-
-      # The macOS manifest already contains its only architecture. Windows still
-      # needs both architectures in one feed. Use the Windows merger directly
-      # because upstream's all-platform merger requires a macOS x64 manifest.
-      - name: Merge Windows update manifests
-        shell: bash
-        run: |
-          shopt -s nullglob
-          mac=(release-assets/*-mac.yml)
-          win_x64=(release-assets/*-win-x64.yml)
-          win_arm64=(release-assets/*-win-arm64.yml)
-          if (( ${#mac[@]} == 0 || ${#win_x64[@]} == 0 || ${#win_x64[@]} != ${#win_arm64[@]} )); then
-            echo "Expected macOS arm64 manifests and complete Windows architecture pairs." >&2
-            exit 1
+          if [[ -n "$VERSION" ]]; then
+            node release/version.mjs verify "$VERSION"
+          else
+            node release/version.mjs verify
           fi
-          for primary in "${win_x64[@]}"; do
-            channel="${primary%-win-x64.yml}"
-            secondary="$channel-win-arm64.yml"
-            [[ -f "$secondary" ]] || { echo "Missing Windows manifest: $secondary" >&2; exit 1; }
-            node scripts/merge-update-manifests.ts --platform win "$primary" "$secondary" "$channel.yml"
-            rm -- "$primary" "$secondary"
-          done
-
-      - name: Verify update manifests and stage installer scripts
+      - id: source
+        env:
+          RECORD: ${{ steps.release.outputs.record }}
         run: |
-          node release-project/release/update-notes.mjs release-assets "$VERSION"
-          cp scripts/install.sh scripts/install.ps1 release-assets/
-          cp "release-project/release/versions/$VERSION.json" release-assets/build-provenance.json
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: verified-release-assets
-          path: release-assets/
-          if-no-files-found: error
-          retention-days: 7
-
-  publish:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish)
-    needs: [preflight, verify_assets]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      TAG: ${{ needs.preflight.outputs.tag }}
-      NAME: G Code ${{ needs.preflight.outputs.version }}
-      REF: ${{ needs.preflight.outputs.ref }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: verified-release-assets
-          path: release-assets
-
-      # Tag creation needs Workflows write access because the commit includes
-      # upstream workflow files. Keep the token out of the build steps.
+          candidate="$(mktemp -d)"
+          node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "" "$RECORD"
+          echo "directory=$candidate" >> "$GITHUB_OUTPUT"
+      # An App push triggers the build workflow on dev/main.
       - id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
-      - name: Publish the verified release
+      - name: Push the assembled release to dev/main
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          PREVIOUS_TAG: ${{ needs.preflight.outputs.previous_tag }}
-          NOTES: ${{ needs.preflight.outputs.notes }}
-        run: bash release/publish.sh
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          RECORD: ${{ steps.release.outputs.record }}
+          NOTES: ${{ steps.release.outputs.notes }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.release.outputs.previous_tag }}
+        run: bash release/push-build.sh

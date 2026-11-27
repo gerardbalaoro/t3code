@@ -33,16 +33,17 @@ jobs:
           files="$(git diff --name-only "$BASE" HEAD)"
           if grep -qE '^release/versions/' <<< "$files"; then
             node release/version.mjs verify
-            expected="$(jq -r .commit "release/versions/$(jq -r .version package.json).json")"
+            record="release/versions/$(jq -r .version package.json).json"
             candidate="$(mktemp -d)"
-            actual="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
-            [[ "$actual" == "$expected" ]] || { echo "The release record does not match the assembled source."; exit 1; }
+            node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "" "$record"
+            test -f "$candidate/.github/workflows/gcode-build.yml"
           elif grep -qE '^(release/source\.json|release/upstream/|\.changeset/.*\.md$)' <<< "$files"; then
+            git update-ref refs/heads/main "$BASE"
             npm ci --ignore-scripts
             node release/version.mjs validate
             candidate="$(mktemp -d)"
             source="$(node release/assemble.mjs "$candidate" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git")"
-            echo "Assembled source: `$source`" >> "$GITHUB_STEP_SUMMARY"
+            printf 'Assembled source: `%s`\n' "$source" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   discover:
