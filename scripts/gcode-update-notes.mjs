@@ -3,7 +3,12 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 export function addUpdateNotes(manifest, version, notes) {
-  if (!manifest.split(/\r?\n/).includes(`version: ${version}`)) {
+  const actualVersion = /^version:[ \t]*(.+)$/m.exec(manifest)?.[1].trim();
+  if (
+    actualVersion !== version &&
+    actualVersion !== `'${version}'` &&
+    actualVersion !== `"${version}"`
+  ) {
     throw new Error(`Updater manifest must specify version ${version}.`);
   }
   if (/^release(?:Name|Notes):/m.test(manifest)) {
