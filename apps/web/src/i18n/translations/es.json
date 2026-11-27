@@ -13091,5 +13091,10 @@
   "a85651f4c6c5e449": "No se pudo crear la carpeta. Inténtalo de nuevo.",
   "052cfecdebf6081d": "Nueva carpeta",
   "5b3b63d0c9d04238": "Esta conexión no permite crear carpetas.",
-  "117072c3108e16ff": "Nueva carpeta"
+  "117072c3108e16ff": "Nueva carpeta",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Comando gcode",
+  "ccf9b9f3089a07b2": "No se pudo cargar el estado del comando gcode.",
+  "25654c1fb38a3107": "Basado en T3 Code {version}"
 }

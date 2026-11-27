@@ -13104,5 +13104,10 @@
   "a85651f4c6c5e449": "Could not create folder. Try again.",
   "052cfecdebf6081d": "New folder",
   "5b3b63d0c9d04238": "Folder creation is unavailable on this connection.",
-  "117072c3108e16ff": "New folder"
+  "117072c3108e16ff": "New folder",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode command",
+  "ccf9b9f3089a07b2": "Failed to load the gcode command state.",
+  "25654c1fb38a3107": "Based on T3 Code {version}"
 }
