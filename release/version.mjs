@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -110,6 +110,7 @@ function prepare() {
     source,
     notesSha256: sha256(notes),
   };
+  mkdirSync(new URL("versions/", releaseDir), { recursive: true });
   writeFileSync(recordPath(version), JSON.stringify(record, null, 2) + "\n", { flag: "wx" });
   writeFileSync(notesPath(version), notes, { flag: "wx" });
   const title = "# G Code Changelog\n";
