@@ -64,8 +64,8 @@ const makeContent = Effect.fn("test.makeContent")(function* () {
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cli-notary-" });
   const contentDir = path.join(root, "content");
   yield* fs.makeDirectory(contentDir);
-  const executablePath = path.join(contentDir, "t3");
-  yield* fs.writeFileString(executablePath, "t3");
+  const executablePath = path.join(contentDir, "gcode");
+  yield* fs.writeFileString(executablePath, "gcode");
   return { root, contentDir, executablePath, submissionFile: path.join(root, "submission") };
 });
 

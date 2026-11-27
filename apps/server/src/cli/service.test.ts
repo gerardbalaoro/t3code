@@ -21,8 +21,8 @@ const status = {
   supported: true,
   installed: true,
   current: true,
-  unitPath: "/home/me/.config/systemd/user/t3code.service",
-  logPath: "/home/me/.t3/userdata/logs/boot-service.log",
+  unitPath: "/home/me/.config/systemd/user/gcode.service",
+  logPath: "/home/me/.t3/userdata/logs/gcode-service.log",
 } as const;
 
 const newerServiceStatus = { ...status, current: false, installedVersion: "999.0.0" };
@@ -45,8 +45,8 @@ function makeTestService(
       Effect.sync(() => {
         installOptions.push(options);
         return {
-          program: ["/test/t3/runtime/versions/1.0.0/t3", "__service-launcher"],
-          baseDir: "/test/t3",
+          program: ["/test/t3/gcode/versions/1.0.0/gcode", "__service-launcher"],
+          baseDir: "/test/gcode",
           unitPath: serviceStatus.unitPath,
           logPath: serviceStatus.logPath,
         };
@@ -76,8 +76,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
       {
         command,
         label: "another home's service",
-        status: { ...newerServiceStatus, otherBaseDir: "/srv/t3" },
-        error: { _tag: "BootServiceOtherBaseDirError", installedBaseDir: "/srv/t3" },
+        status: { ...newerServiceStatus, otherBaseDir: "/srv/gcode" },
+        error: { _tag: "BootServiceOtherBaseDirError", installedBaseDir: "/srv/gcode" },
       },
     ]),
   )(
@@ -163,7 +163,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-cli-test-" });
-      const baseDir = `${parent}/t3`;
+      const baseDir = `${parent}/gcode`;
       vi.spyOn(BootService, "layer").mockReturnValue(
         Layer.succeed(BootService.BootService, makeTestService(status).service),
       );
@@ -222,7 +222,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
             ),
           ),
         );
-        expect(output).toContain(`t3@${packageJson.version}`);
+        expect(output).toContain(`gcode ${packageJson.version}`);
         expect(output).toContain(script);
         expect(installOptions).toEqual([]);
       }),
