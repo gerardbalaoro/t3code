@@ -24,7 +24,7 @@ Use an application worktree for feature and distribution development.
 
 A PR can bring in several feature revisions and an upstream update together. If the parent of a stacked patch moves, update the dependent patch in the same PR.
 
-[Sync](.github/workflows/sync.yml) reports the latest official nightly on a schedule and checks whether PR inputs can be replayed. Review any icon changes it reports before advancing the upstream base.
+[G Code release inputs](.github/workflows/release-inputs.yml) reports the latest official nightly on a schedule and checks whether PR inputs can be replayed. Review any icon changes it reports before advancing the upstream base.
 
 ## Build and Release
 
@@ -53,4 +53,12 @@ node release/assemble.mjs "$candidate" https://github.com/gerardbalaoro/t3code.g
 
 Configure the GitHub App ID in `RELEASE_APP_ID` and its private key in `RELEASE_APP_PRIVATE_KEY`. The app needs Contents, Workflows, and Pull Requests write access.
 
-Require the PR checks before merging. Keep `gcode/inputs/*` and published tags available for retries. Allow the release app to update `dev/main` and create tags. Disable the legacy **Nightly** workflow at cutover.
+Require the PR checks before merging. Keep `gcode/inputs/*` and published tags available for retries. Allow the release app to update `dev/main` and create tags.
+
+## Switch From Nightly Releases
+
+1. Verify that legacy **Sync** is disabled. Disable legacy **Nightly** and wait for any active legacy runs to finish.
+2. Push the `dev/patch` revision pinned by the new source manifest. Then merge the release tooling into `main`.
+3. If GitHub lists **Build and publish G Code** as disabled, enable it before merging the first release PR.
+
+Legacy Sync can disable the new build workflow if it replays the new patch. Until the first stable release publishes, the existing nightly remains the available download. Nightly users can follow the [manual upgrade steps](README.md#upgrade-from-a-g-code-nightly) once stable is available.

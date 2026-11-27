@@ -1,4 +1,4 @@
-name: Sync
+name: G Code release inputs
 
 on:
   pull_request:
