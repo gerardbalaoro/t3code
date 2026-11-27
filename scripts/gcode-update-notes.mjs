@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 
 export function addUpdateNotes(manifest, version, notes) {
   if (!manifest.split(/\r?\n/).includes(`version: ${version}`)) {
@@ -14,11 +14,16 @@ export function addUpdateNotes(manifest, version, notes) {
   return `${manifest.trimEnd()}\nreleaseName: ${JSON.stringify(`G Code ${version}`)}\nreleaseNotes: ${JSON.stringify(notes)}\n`;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] === NodeURL.fileURLToPath(import.meta.url)) {
   const [directory, version, notesFile] = process.argv.slice(2);
-  const notes = readFileSync(notesFile, "utf8");
-  for (const name of ["latest.yml", "latest-mac.yml", "latest-linux.yml", "latest-linux-arm64.yml"]) {
-    const path = join(directory, name);
-    writeFileSync(path, addUpdateNotes(readFileSync(path, "utf8"), version, notes));
+  const notes = NodeFS.readFileSync(notesFile, "utf8");
+  for (const name of [
+    "latest.yml",
+    "latest-mac.yml",
+    "latest-linux.yml",
+    "latest-linux-arm64.yml",
+  ]) {
+    const path = NodePath.join(directory, name);
+    NodeFS.writeFileSync(path, addUpdateNotes(NodeFS.readFileSync(path, "utf8"), version, notes));
   }
 }
