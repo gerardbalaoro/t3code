@@ -28,14 +28,14 @@ jobs:
       clerk_cli_oauth_client_id: ${{ steps.connect.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ steps.connect.outputs.relay_url }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          filter: blob:none
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+      - name: Check out the pushed commit
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
 
       - id: version
         name: Read the release recorded in the pushed commit
@@ -91,14 +91,14 @@ jobs:
       T3CODE_TELEMETRY_CHANNEL: dev
       GCODE_UPSTREAM_TAG: ${{ needs.preflight.outputs.upstream_tag }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+      - name: Check out the pushed commit
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
 
       - name: Download dependency verification
         continue-on-error: true
@@ -291,14 +291,14 @@ jobs:
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+      - name: Check out the pushed commit
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
 
       - uses: ./.github/actions/setup-ci-deps
         with:
@@ -372,13 +372,14 @@ jobs:
       NAME: G Code ${{ needs.preflight.outputs.version }}
       REF: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+      - name: Check out the pushed commit
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
       - uses: actions/download-artifact@v8
         with:
           name: verified-release-assets
