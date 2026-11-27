@@ -28,7 +28,7 @@ import * as ProcessRunner from "../processRunner.ts";
 import { windowsPowerShellPath } from "@t3tools/shared/windowsSystem";
 import { isExactServiceVersion, parseServiceState, SERVICE_STATE_FILE } from "./serviceProtocol.ts";
 
-const PINNED_RUNTIME_DIR = "runtime";
+const PINNED_RUNTIME_DIR = "gcode";
 const PINNED_RUNTIME_INSTALL_TIMEOUT = Duration.minutes(10);
 const PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT = Duration.minutes(1);
 const PINNED_RUNTIME_ARCHIVE_FILE = "t3-runtime-archive";
@@ -61,7 +61,7 @@ export function pinnedRuntimePaths(
   const versionDir = path.join(pinnedRuntimeVersionsDir(path, baseDir), version);
   return {
     versionDir,
-    entryPath: path.join(versionDir, platform === "win32" ? "t3.exe" : "t3"),
+    entryPath: path.join(versionDir, platform === "win32" ? "gcode.exe" : "gcode"),
     sentinelPath: path.join(versionDir, ".install-complete"),
   };
 }
@@ -585,7 +585,7 @@ export function isVersionExecutable(
 ): boolean {
   const relative = path.relative(versionsDir, path.resolve(candidate));
   // On another Windows drive, relative() returns the absolute path, like `D:\t3.exe`.
-  return !path.isAbsolute(relative) && /^(?!\.\.)[^\\/]+[\\/]t3(?:\.exe)?$/i.test(relative);
+  return !path.isAbsolute(relative) && /^(?!\.\.)[^\\/]+[\\/]gcode(?:\.exe)?$/i.test(relative);
 }
 
 /** The executable a `t3.cmd` shim written by the install script or `t3 update` runs. */
@@ -620,7 +620,7 @@ export const readPosixLauncherTarget = Effect.fn("cloud.pinned_runtime.read_posi
 
 /**
  * The `t3` this executable was started through on macOS or Linux: a legacy symlink into this
- * home's runtime/versions, or, since a script execs the executable and argv0 names it, an unedited
+ * home's gcode/versions, or, since a script execs the executable and argv0 names it, an unedited
  * {@link posixLauncherScript} that runs it.
  */
 export const findPosixLauncher = Effect.fn("cloud.pinned_runtime.find_posix_launcher")(
@@ -653,12 +653,12 @@ export const findPosixLauncher = Effect.fn("cloud.pinned_runtime.find_posix_laun
       // PATH first, resolved like the shell does: it decides which t3 the user runs. An empty
       // entry of a nonempty PATH is the working directory; an empty PATH searches nothing.
       ...(searchPath.length === 0 ? [] : searchPath.split(":")).map((directory) =>
-        path.resolve(cwd, directory || ".", "t3"),
+        path.resolve(cwd, directory || ".", "gcode"),
       ),
       path.join(
         environment["T3CODE_INSTALL_BIN_DIR"] ||
           path.join(yield* HostProcess.HomeDirectory, ".local", "bin"),
-        "t3",
+        "gcode",
       ),
       ...recorded.split(/\r?\n/),
     ].filter((candidate) => path.isAbsolute(candidate));
@@ -688,7 +688,7 @@ export const writePosixLauncher = Effect.fn("cloud.pinned_runtime.write_posix_la
     const path = yield* Path.Path;
     const staging = yield* fs.makeTempFileScoped({
       directory: path.dirname(input.launcher),
-      prefix: ".t3-",
+      prefix: ".gcode-",
     });
     yield* fs.writeFileString(staging, posixLauncherScript(input.executable));
     yield* fs.chmod(staging, 0o755);
@@ -706,7 +706,7 @@ const shellLauncherTargets = Effect.fn("cloud.pinned_runtime.shell_launcher_targ
   const platform = yield* HostProcess.Platform;
   const environment = yield* HostProcess.Environment;
   const home = yield* HostProcess.HomeDirectory;
-  const launcherName = platform === "win32" ? "t3.cmd" : "t3";
+  const launcherName = platform === "win32" ? "gcode.cmd" : "gcode";
   const launchersFile = path.join(baseDir, PINNED_RUNTIME_DIR, PINNED_RUNTIME_LAUNCHERS_FILE);
   const recorded = (yield* fs.readFileString(launchersFile).pipe(Effect.orElseSucceed(() => "")))
     .split(/\r?\n/)

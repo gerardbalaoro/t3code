@@ -1,4 +1,8 @@
 {
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Kommandot gcode",
+  "ccf9b9f3089a07b2": "Det gick inte att läsa in statusen för kommandot gcode.",
   "4bcfa3b976a421cf": "Sidochatt",
   "23be753133ae6950": "Tråd",
   "0001ae5846061bb6": "Tråd på {machine}",
@@ -7363,6 +7367,7 @@
   "60b53cc903821cbb": "Kunde inte kopiera versionen till urklipp.",
   "0cb463936215a3cc": "Kunde inte kopiera versionen",
   "6d521d61ed177169": "Kopiera version {version}",
+  "25654c1fb38a3107": "Baserad på T3 Code {version}",
   "18040c4f55f3b533": "Version",
   "fd1d2853467e6195": "Kopiera version",
   "5498f2f33907b02c": "ACP:n kunde inte förberedas.",

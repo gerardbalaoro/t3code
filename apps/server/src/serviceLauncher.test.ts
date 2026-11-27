@@ -154,10 +154,10 @@ it("rejects contradictory service state", () => {
 });
 
 const unitPlan = (root: string, version: string) => ({
-  program: [`${root}/runtime/versions/${version}/t3`, "__service-launcher"],
+  program: [`${root}/gcode/versions/${version}/gcode`, "__service-launcher"],
   baseDir: root,
-  logPath: `${root}/logs/boot-service.log`,
-  unitPath: `${root}/unit/t3code.service`,
+  logPath: `${root}/logs/gcode-service.log`,
+  unitPath: `${root}/unit/gcode.service`,
 });
 
 const writeFakeRuntime = (
@@ -167,7 +167,7 @@ const writeFakeRuntime = (
   childSource: string,
 ) =>
   Effect.gen(function* () {
-    const entryPath = path.join(versionDir, "t3");
+    const entryPath = path.join(versionDir, "gcode");
     yield* fs.makeDirectory(versionDir, { recursive: true });
     yield* fs.writeFileString(entryPath, `#!${process.execPath}\n${childSource}`);
     yield* fs.chmod(entryPath, 0o755);
@@ -229,9 +229,9 @@ it.layer(NodeServices.layer)("service state persistence", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-disk-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "statev2.sqlite");
-      let backupPath = path.join(root, "runtime", "db-backup", "disk-update");
+      let backupPath = path.join(root, "gcode", "db-backup", "disk-update");
       const pending = {
         id: "disk-update",
         fromVersion: "1.0.0",
@@ -274,7 +274,7 @@ setInterval(() => {}, 1_000);
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -382,7 +382,7 @@ setInterval(() => {}, 1_000);
       );
       if (scenario === "update handoff") {
         const state = yield* Effect.promise(() => readServiceState(statePath));
-        backupPath = path.join(root, "runtime", "db-backup", state.update!.id);
+        backupPath = path.join(root, "gcode", "db-backup", state.update!.id);
       }
       assert.equal(
         yield* fs.exists(backupPath),
@@ -391,7 +391,9 @@ setInterval(() => {}, 1_000);
       if (scenario === "trial exit")
         assert.equal(yield* fs.readFileString(databasePath), "migrated");
       if (scenario === "failed trial start") {
-        yield* fs.remove(path.join(root, "runtime", "versions", "1.1.0"), { recursive: true });
+        yield* fs.remove(path.join(root, "gcode", "versions", "1.1.0"), {
+          recursive: true,
+        });
       }
       low = false;
       recovered = true;
@@ -473,7 +475,7 @@ setInterval(() => {}, 1_000);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-task-" });
-      const unitPath = path.join(root, "t3code-task.xml");
+      const unitPath = path.join(root, "gcode-task.xml");
       const unit = renderBootServiceTask(unitPlan(root, "1.1.0"), {
         userId: "PC\\theo",
         homeDir: "C:\\Users\\theo",
@@ -487,12 +489,12 @@ setInterval(() => {}, 1_000);
         return { stdout: task };
       };
 
-      yield* Effect.promise(() => registerServiceTask(unitPath, "t3code-PC-theo", schtasks));
+      yield* Effect.promise(() => registerServiceTask(unitPath, "gcode-PC-theo", schtasks));
       assert.equal(task, disabledServiceTask(unit));
-      assert.deepEqual(yield* fs.readDirectory(root), ["t3code-task.xml"]);
+      assert.deepEqual(yield* fs.readDirectory(root), ["gcode-task.xml"]);
 
       task = unit.replace("1.1.0", "1.0.0");
-      yield* Effect.promise(() => registerServiceTask(unitPath, "t3code-PC-theo", schtasks));
+      yield* Effect.promise(() => registerServiceTask(unitPath, "gcode-PC-theo", schtasks));
       assert.equal(task, unit);
     }),
   );
@@ -513,11 +515,11 @@ setInterval(() => {}, 1_000);
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.1.0"),
+        path.join(root, "gcode", "versions", "1.1.0"),
         "process.exit(0);\n",
       );
       yield* Effect.promise(() =>
-        writeServiceState(path.join(root, "runtime", "service-state.json"), {
+        writeServiceState(path.join(root, "gcode", "service-state.json"), {
           protocol: SERVICE_LAUNCHER_PROTOCOL,
           activeVersion: "1.1.0",
           update: {
@@ -548,7 +550,7 @@ setInterval(() => {}, 1_000);
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-xdg-" });
         const home = path.join(root, "home");
         const managerUnitDir = path.join(home, ".config", "systemd", "user");
-        const unitPath = path.join(managerUnitDir, "t3code.service");
+        const unitPath = path.join(managerUnitDir, "gcode.service");
         const render = (version: string) =>
           renderBootServiceUnit({ ...unitPlan(root, version), unitPath });
         yield* fs.makeDirectory(managerUnitDir, { recursive: true });
@@ -573,11 +575,11 @@ setInterval(() => {}, 1_000);
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", "1.1.0"),
+          path.join(root, "gcode", "versions", "1.1.0"),
           "process.exit(0);\n",
         );
         yield* Effect.promise(() =>
-          writeServiceState(path.join(root, "runtime", "service-state.json"), {
+          writeServiceState(path.join(root, "gcode", "service-state.json"), {
             protocol: SERVICE_LAUNCHER_PROTOCOL,
             activeVersion: "1.1.0",
             update: {
@@ -592,7 +594,7 @@ setInterval(() => {}, 1_000);
         vi.stubEnv("HOME", home);
         // environment.d changes what services inherit, not where the manager reads units.
         vi.stubEnv("XDG_CONFIG_HOME", path.join(home, "service-config"));
-        vi.stubEnv("T3_BOOT_SERVICE_UNIT", "t3code.service");
+        vi.stubEnv("T3_BOOT_SERVICE_UNIT", "gcode.service");
 
         yield* Effect.promise(() =>
           expect(runLauncher(root)).rejects.toThrow("Active child exited unexpectedly (0)."),
@@ -623,11 +625,11 @@ setInterval(() => {}, 1_000);
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.0.0"),
+        path.join(root, "gcode", "versions", "1.0.0"),
         "process.exit(0);\n",
       );
       yield* Effect.promise(() =>
-        writeServiceState(path.join(root, "runtime", "service-state.json"), {
+        writeServiceState(path.join(root, "gcode", "service-state.json"), {
           protocol: SERVICE_LAUNCHER_PROTOCOL,
           activeVersion: "1.0.0",
         }),
@@ -649,9 +651,9 @@ setInterval(() => {}, 1_000);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-migrate-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const activeVersion = "0.0.43-nightly.20260919.1962+build.1";
-      const versionDir = path.join(root, "runtime", "versions", activeVersion);
+      const versionDir = path.join(root, "gcode", "versions", activeVersion);
       yield* writeFakeRuntime(
         fs,
         path,
@@ -664,7 +666,7 @@ process.exit(0);
       );
       const legacyContents = `{ "protocol": 2, "activeVersion": "${activeVersion}" }`;
       yield* fs.writeFileString(statePath, legacyContents);
-      const restartPending = path.join(root, "runtime", ".restart-pending");
+      const restartPending = path.join(root, "gcode", ".restart-pending");
       yield* fs.writeFileString(restartPending, `${activeVersion}\n`);
 
       yield* Effect.promise(() =>
@@ -683,7 +685,7 @@ process.exit(0);
       const path = yield* Path.Path;
       const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-space-" });
       const root = path.join(parent, "T3 data ");
-      const versionDir = path.join(root, "runtime", "versions", "1.0.0");
+      const versionDir = path.join(root, "gcode", "versions", "1.0.0");
       yield* writeFakeRuntime(
         fs,
         path,
@@ -695,7 +697,7 @@ process.exit(0);
 `,
       );
       yield* fs.writeFileString(
-        path.join(root, "runtime", "service-state.json"),
+        path.join(root, "gcode", "service-state.json"),
         JSON.stringify({ protocol: 4, activeVersion: "1.0.0" }),
       );
 
@@ -712,11 +714,11 @@ process.exit(0);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-reject-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.0.0"),
+        path.join(root, "gcode", "versions", "1.0.0"),
         "process.exit(0);\n",
       );
       const legacy = { protocol: 2, activeVersion: "1.0.0" };
@@ -754,7 +756,7 @@ process.exit(0);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-layout-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const contents = '{ "protocol": 2, "activeVersion": "1.0.0" }';
       yield* fs.makeDirectory(path.dirname(statePath), { recursive: true });
       yield* fs.writeFileString(statePath, contents);
@@ -762,7 +764,7 @@ process.exit(0);
 
       yield* Effect.promise(() =>
         expect(runLauncher(root)).rejects.toThrow(
-          "Selected t3@1.0.0 runtime is missing or incomplete.",
+          "Selected gcode 1.0.0 runtime is missing or incomplete.",
         ),
       );
       assert.equal(yield* fs.readFileString(statePath), contents);
@@ -770,17 +772,17 @@ process.exit(0);
     }),
   );
 
-  it.effect("a fresh launcher clears a restart deferred by t3 update", () =>
+  it.effect("a fresh launcher clears a restart deferred by gcode update", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-restart-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
-      const restartPending = path.join(root, "runtime", SERVICE_RESTART_PENDING_FILE);
+      const statePath = path.join(root, "gcode", "service-state.json");
+      const restartPending = path.join(root, "gcode", SERVICE_RESTART_PENDING_FILE);
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.0.0"),
+        path.join(root, "gcode", "versions", "1.0.0"),
         "setInterval(() => {}, 1_000);\n",
       );
       yield* Effect.promise(() =>
@@ -820,11 +822,11 @@ process.exit(0);
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-repoint-" });
-        const statePath = path.join(root, "runtime", "service-state.json");
+        const statePath = path.join(root, "gcode", "service-state.json");
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", "1.1.0"),
+          path.join(root, "gcode", "versions", "1.1.0"),
           "setInterval(() => {}, 1_000);\n",
         );
         yield* Effect.promise(() =>
@@ -882,10 +884,10 @@ process.exit(0);
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(selectedRoot, "runtime", "versions", "1.0.0"),
+          path.join(selectedRoot, "gcode", "versions", "1.0.0"),
           "setInterval(() => {}, 1_000);\n",
         );
-        const selectedStatePath = path.join(selectedRoot, "runtime", "service-state.json");
+        const selectedStatePath = path.join(selectedRoot, "gcode", "service-state.json");
         yield* Effect.promise(() =>
           writeServiceState(selectedStatePath, {
             protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -916,11 +918,11 @@ process.exit(0);
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-alias-" });
       const alias = path.join(root, "alias");
       yield* fs.symlink(root, alias);
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.1.0"),
+        path.join(root, "gcode", "versions", "1.1.0"),
         "setInterval(() => {}, 1_000);\n",
       );
       yield* Effect.promise(() =>
@@ -959,13 +961,13 @@ process.exit(0);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-reclaim-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const ownerPath = path.join(root, "userdata", "server-owner.sqlite");
       yield* fs.makeDirectory(path.dirname(ownerPath), { recursive: true });
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.0.0"),
+        path.join(root, "gcode", "versions", "1.0.0"),
         [
           `const db = new (require("node:sqlite").DatabaseSync)(${JSON.stringify(ownerPath)});`,
           `try { db.exec("PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE;"); }`,
@@ -1032,7 +1034,7 @@ process.exit(0);
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-reclaim-update-" });
-        const statePath = path.join(root, "runtime", "service-state.json");
+        const statePath = path.join(root, "gcode", "service-state.json");
         const ownerPath = path.join(root, "userdata", "server-owner.sqlite");
         const databasePath = path.join(root, "userdata", "state.sqlite");
         const startsPath = path.join(root, "starts.log");
@@ -1042,7 +1044,7 @@ process.exit(0);
           yield* writeFakeRuntime(
             fs,
             path,
-            path.join(root, "runtime", "versions", version),
+            path.join(root, "gcode", "versions", version),
             [
               `const db = new (require("node:sqlite").DatabaseSync)(${JSON.stringify(ownerPath)});`,
               `try { db.exec("PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE;"); }`,
@@ -1104,7 +1106,7 @@ process.exit(0);
         const idle = yield* Effect.promise(() => readServiceState(statePath));
         assert.strictEqual(idle.activeVersion, "1.0.0");
         assert.strictEqual(idle.update?.status, "pending");
-        assert.isFalse(yield* fs.exists(path.join(root, "runtime", "db-backup", "update-1")));
+        assert.isFalse(yield* fs.exists(path.join(root, "gcode", "db-backup", "update-1")));
 
         yield* fs.writeFileString(databasePath, "written by the other owner");
         otherOwner.close();
@@ -1125,9 +1127,9 @@ process.exit(0);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-slow-discard-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
-      const backupPath = path.join(root, "runtime", "db-backup", "update-1");
+      const backupPath = path.join(root, "gcode", "db-backup", "update-1");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
       yield* fs.writeFileString(databasePath, "before trial");
       // The trial gives the launcher 30 seconds to answer "prepared". A backup drop that
@@ -1152,7 +1154,7 @@ setInterval(() => {}, 1_000);
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1217,7 +1219,7 @@ setInterval(() => {}, 1_000);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-stale-backup-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const ownerPath = path.join(root, "userdata", "server-owner.sqlite");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       yield* fs.makeDirectory(path.dirname(ownerPath), { recursive: true });
@@ -1225,7 +1227,7 @@ setInterval(() => {}, 1_000);
       yield* writeFakeRuntime(
         fs,
         path,
-        path.join(root, "runtime", "versions", "1.1.0"),
+        path.join(root, "gcode", "versions", "1.1.0"),
         `process.exit(${SERVER_EXIT_CODE_STATE_DIR_OWNED});\n`,
       );
       yield* Effect.promise(() =>
@@ -1253,7 +1255,7 @@ setInterval(() => {}, 1_000);
       );
       yield* Effect.acquireRelease(
         Effect.sync(() => {
-          failRm.path = path.join(root, "runtime", "db-backup", "update-1");
+          failRm.path = path.join(root, "gcode", "db-backup", "update-1");
         }),
         () =>
           Effect.sync(() => {
@@ -1312,7 +1314,7 @@ setInterval(() => {}, 1_000);
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service 100% & <test>-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       const activatedPath = path.join(root, "activated");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
@@ -1355,7 +1357,7 @@ if (context.update?.status === "pending") {
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1413,7 +1415,7 @@ if (context.update?.status === "pending") {
       render: (plan: Parameters<typeof renderBootServicePlist>[0]) =>
         renderBootServicePlist(plan, {
           homeDir: "/Users/test & <user>",
-          environmentPath: "/usr/bin:/custom/runtime/versions/1.0.0",
+          environmentPath: "/usr/bin:/custom/gcode/versions/1.0.0",
         }),
     },
     {
@@ -1466,7 +1468,7 @@ if (context.update?.status === "pending") {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-rollback-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       const observationsPath = path.join(root, "environment-observations.jsonl");
       const envPath = path.join(root, SERVICE_ENV_FILE);
@@ -1498,7 +1500,7 @@ if (context.update?.status === "pending") {
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1558,7 +1560,7 @@ if (context.update?.status === "pending") {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-db-" });
-        const statePath = path.join(root, "runtime", "service-state.json");
+        const statePath = path.join(root, "gcode", "service-state.json");
         const databasePath = path.join(root, "userdata", "state.sqlite");
         const databaseFile =
           kind === "file" ? databasePath : path.join(root, "data", "original.sqlite");
@@ -1594,7 +1596,7 @@ if (context.update?.status === "pending") {
           yield* writeFakeRuntime(
             fs,
             path,
-            path.join(root, "runtime", "versions", version),
+            path.join(root, "gcode", "versions", version),
             childSource,
           );
         }
@@ -1626,7 +1628,7 @@ if (context.update?.status === "pending") {
         assert.isFalse(yield* fs.exists(`${databasePath}-shm`));
         const updateId = state.update?.id;
         assert.isDefined(updateId);
-        assert.isFalse(yield* fs.exists(path.join(root, "runtime", "db-backup", updateId)));
+        assert.isFalse(yield* fs.exists(path.join(root, "gcode", "db-backup", updateId)));
       }),
   );
 
@@ -1637,7 +1639,7 @@ if (context.update?.status === "pending") {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-online-" });
-        const statePath = path.join(root, "runtime", "service-state.json");
+        const statePath = path.join(root, "gcode", "service-state.json");
         const databasePath = path.join(root, "userdata", "state.sqlite");
         const observationsPath = path.join(root, "observations.json");
         yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
@@ -1660,7 +1662,7 @@ const paths = ${encoded};
 const context = JSON.parse(process.env.T3_SERVICE_LAUNCHER_CONTEXT);
 if (context.update?.status === "pending") {
   writeFileSync(paths.observationsPath + ".trial", JSON.stringify(
-    readdirSync(paths.root + "/runtime/db-backup/" + context.update.id).sort(),
+    readdirSync(paths.root + "/gcode/db-backup/" + context.update.id).sort(),
   ));
   const trial = new DatabaseSync(context.update.dbPath);
   trial.exec("PRAGMA journal_mode = " + paths.journalMode + "; INSERT INTO events (payload) VALUES ('trial');");
@@ -1675,7 +1677,7 @@ if (context.update?.status === "pending") {
   process.once("SIGTERM", () => {
     clearInterval(writer);
     insert.run("last write before stopping");
-    const backupRoot = paths.root + "/runtime/db-backup";
+    const backupRoot = paths.root + "/gcode/db-backup";
     writeFileSync(paths.observationsPath, JSON.stringify({
       backupsAtStop: readdirSync(backupRoot).map((entry) => readdirSync(backupRoot + "/" + entry)),
       rows: db.prepare("SELECT count(*) AS n FROM events").get().n,
@@ -1692,7 +1694,7 @@ if (context.update?.status === "pending") {
           yield* writeFakeRuntime(
             fs,
             path,
-            path.join(root, "runtime", "versions", version),
+            path.join(root, "gcode", "versions", version),
             childSource,
           );
         }
@@ -1754,7 +1756,7 @@ if (context.update?.status === "pending") {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-space-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       const replyPath = path.join(root, "rejection.txt");
       const trialMarker = path.join(root, "trial-started");
@@ -1785,7 +1787,7 @@ if (context.update?.status === "pending") {
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1851,7 +1853,7 @@ if (context.update?.status === "pending") {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-control-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       const reportPath = path.join(root, "stopped-with-marker");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
@@ -1859,7 +1861,7 @@ if (context.update?.status === "pending") {
       const encoded = JSON.stringify({
         databasePath,
         reportPath,
-        markerPath: path.join(root, "runtime", SERVICE_STOP_MARKER_FILE),
+        markerPath: path.join(root, "gcode", SERVICE_STOP_MARKER_FILE),
       });
       const childSource = `
 const fs = require("node:fs");
@@ -1875,7 +1877,7 @@ process.send({ type: "request-update", targetVersion: "1.1.0", dbPath: paths.dat
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1920,7 +1922,7 @@ process.send({ type: "request-update", targetVersion: "1.1.0", dbPath: paths.dat
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-startup-stop-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       // Recovery would roll this back: the target runtime is missing.
       const pending = {
         protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -1952,13 +1954,13 @@ process.send({ type: "request-update", targetVersion: "1.1.0", dbPath: paths.dat
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-backup-stop-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const childSource = "setInterval(() => {}, 1000);\n";
       for (const version of ["1.0.0", "1.1.0"]) {
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -1991,7 +1993,7 @@ process.send({ type: "request-update", targetVersion: "1.1.0", dbPath: paths.dat
         [],
       );
       assert.deepEqual(yield* Effect.promise(() => readServiceState(statePath)), pending);
-      const backupDir = path.join(root, "runtime", "db-backup", "update-1");
+      const backupDir = path.join(root, "gcode", "db-backup", "update-1");
       assert.isFalse(yield* fs.exists(backupDir));
       assert.isFalse(yield* fs.exists(`${backupDir}.staging`));
     }),
@@ -2002,7 +2004,7 @@ process.send({ type: "request-update", targetVersion: "1.1.0", dbPath: paths.dat
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-exit-" });
-      const statePath = path.join(root, "runtime", "service-state.json");
+      const statePath = path.join(root, "gcode", "service-state.json");
       const databasePath = path.join(root, "userdata", "state.sqlite");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
       yield* fs.writeFileString(databasePath, "database");
@@ -2018,7 +2020,7 @@ setInterval(() => {}, 1_000);
         yield* writeFakeRuntime(
           fs,
           path,
-          path.join(root, "runtime", "versions", version),
+          path.join(root, "gcode", "versions", version),
           childSource,
         );
       }
@@ -2064,7 +2066,7 @@ setInterval(() => {}, 1_000);
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-orphan-" });
       const databasePath = path.join(root, "state.sqlite");
       yield* writeSparseFile(databasePath, 10 * 1024 ** 3);
-      const backupRoot = path.join(root, "runtime", "db-backup");
+      const backupRoot = path.join(root, "gcode", "db-backup");
       const orphan = path.join(backupRoot, "earlier-update.staging");
       const completed = path.join(backupRoot, "completed-update");
       yield* fs.makeDirectory(orphan, { recursive: true });

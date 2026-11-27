@@ -1,4 +1,8 @@
 {
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode 命令",
+  "ccf9b9f3089a07b2": "无法加载 gcode 命令状态。",
   "4bcfa3b976a421cf": "侧聊",
   "23be753133ae6950": "会话",
   "0001ae5846061bb6": "{machine} 上的会话",
@@ -7371,6 +7375,7 @@
   "60b53cc903821cbb": "无法将版本复制到剪贴板。",
   "0cb463936215a3cc": "无法复制版本",
   "6d521d61ed177169": "复制版本 {version}",
+  "25654c1fb38a3107": "基于 T3 Code {version}",
   "18040c4f55f3b533": "版本",
   "fd1d2853467e6195": "复制版本",
   "5498f2f33907b02c": "无法准备 ACP。",

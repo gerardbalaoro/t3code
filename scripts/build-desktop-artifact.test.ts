@@ -93,7 +93,7 @@ const makeLinuxCliArchiveFixture = Effect.fn("test.makeLinuxCliArchiveFixture")(
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const contentRoot = path.join(input.root, "content");
   const members = [
-    `${input.stem}/t3`,
+    `${input.stem}/gcode`,
     `${input.stem}/client/index.html`,
     `${input.stem}/node_modules/node-pty/package.json`,
     `${input.stem}/node_modules/node-pty/build/Release/pty.node`,
@@ -186,7 +186,7 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
         ? yield* makeLinuxCliArchiveFixture({
             root: path.join(tempDir, "wsl-runtime"),
             stem: "apps",
-            omitMembers: ["apps/t3", "apps/client/index.html"],
+            omitMembers: ["apps/gcode", "apps/client/index.html"],
             extraMembers: ["apps/server/dist/bin.mjs", "node_modules/node-pty/package.json"],
           })
         : yield* makeLinuxCliArchiveFixture({
@@ -568,7 +568,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "com.t3tools.T3Code");
+      assert.nestedPropertyVal(
+        linux,
+        "linux.desktop.entry.StartupWMClass",
+        "io.github.gerardbalaoro.gcode",
+      );
     }),
   );
 
@@ -1567,7 +1571,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "io.github.gerardbalaoro.gcode",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1590,7 +1594,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.io.github.gerardbalaoro.gcode</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -1605,7 +1609,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("grants in-app browser passkey entitlements only when the provisioning profile does", () => {
-    const configuration = { appId: "com.t3tools.t3code", teamId: "ABC1234567" };
+    const configuration = { appId: "io.github.gerardbalaoro.gcode", teamId: "ABC1234567" };
     const profile = (entitlements: string, outside = "") =>
       `0\x82\x1f\x9a\x06\t*\x86H<?xml version="1.0"?><plist version="1.0"><dict>${outside}<key>Entitlements</key><dict>${entitlements}</dict></dict></plist>\x00\x01`;
     const teamWildcardGroups = `<key>keychain-access-groups</key>
@@ -1647,7 +1651,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         configuration,
       ),
       {
-        touchIdKeychainAccessGroup: "ABC1234567.com.t3tools.t3code.webauthn",
+        touchIdKeychainAccessGroup: "ABC1234567.io.github.gerardbalaoro.gcode.webauthn",
         browserPasskeys: true,
       },
     );
@@ -1663,7 +1667,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     );
     assert.match(
       entitlements,
-      /<key>keychain-access-groups<\/key>\s*<array>\s*<string>ABC1234567\.com\.t3tools\.t3code\.webauthn<\/string>\s*<\/array>/u,
+      /<key>keychain-access-groups<\/key>\s*<array>\s*<string>ABC1234567\.io\.github\.gerardbalaoro\.gcode\.webauthn<\/string>\s*<\/array>/u,
     );
     assert.match(
       entitlements,
@@ -1777,8 +1781,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it("parses Windows bsdtar member listings with CRLF line endings", () => {
     assert.deepStrictEqual(
-      parseWslRuntimeArchiveMembers("./t3-1.2.3-linux-x64/t3\r\nt3-1.2.3-linux-x64/client/\r\n"),
-      ["t3-1.2.3-linux-x64/t3", "t3-1.2.3-linux-x64/client"],
+      parseWslRuntimeArchiveMembers(
+        "./gcode-1.2.3-linux-x64/gcode\r\ngcode-1.2.3-linux-x64/client/\r\n",
+      ),
+      ["gcode-1.2.3-linux-x64/gcode", "gcode-1.2.3-linux-x64/client"],
     );
   });
 
@@ -1790,7 +1796,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-wsl-runtime-stage-" });
         const sourceArchivePath = yield* makeLinuxCliArchiveFixture({
           root,
-          stem: "t3-1.2.3-linux-x64",
+          stem: "gcode-1.2.3-linux-x64",
         });
         const stageAppDir = path.join(root, "app");
         const archivePath = path.join(stageAppDir, WSL_RUNTIME_ARCHIVE_EXTRA_RESOURCE.from);

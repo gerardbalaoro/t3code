@@ -1,4 +1,8 @@
 {
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode-Befehl",
+  "ccf9b9f3089a07b2": "Der Status des gcode-Befehls konnte nicht geladen werden.",
   "4bcfa3b976a421cf": "Nebenchat",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread auf {machine}",
@@ -7356,6 +7360,7 @@
   "60b53cc903821cbb": "Die Version konnte nicht in die Zwischenablage kopiert werden.",
   "0cb463936215a3cc": "Version konnte nicht kopiert werden",
   "6d521d61ed177169": "Version {version} kopieren",
+  "25654c1fb38a3107": "Basiert auf T3 Code {version}",
   "18040c4f55f3b533": "Version",
   "fd1d2853467e6195": "Version kopieren",
   "5498f2f33907b02c": "Der ACP konnte nicht vorbereitet werden.",

@@ -63,7 +63,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DESKTOP_APP_ID = "io.github.gerardbalaoro.gcode";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2951,7 +2951,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code",
+      executableName: "gcode-desktop",
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -2965,7 +2965,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       desktop: {
         entry: {
           // Match Electron's WM_CLASS from setDesktopName so docks use this launcher.
-          StartupWMClass: "com.t3tools.T3Code",
+          StartupWMClass: DESKTOP_APP_ID,
         },
       },
     };
@@ -2979,8 +2979,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.deb = {
       // FPM runs outside the staged app directory, so source paths must be absolute.
       fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
-        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
+        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/io.github.gerardbalaoro.gcode.metainfo.xml`,
+        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/gcode/copyright`,
       ],
       // Debian 13 and Ubuntu 24.04 use 64-bit-time names; retain old-name fallbacks.
       depends: [
@@ -3080,7 +3080,7 @@ export const stageWslRuntimeArchive = Effect.fn("stageWslRuntimeArchive")(functi
 
 // Match cliArchiveStem without its circular import. WSL uses the Windows host's architecture.
 export const wslRuntimeArchiveStem = (version: string, arch: typeof BuildArch.Type): string =>
-  `t3-${version}-linux-${arch}`;
+  `gcode-${version}-linux-${arch}`;
 
 export const parseWslRuntimeArchiveMembers = (listing: string): ReadonlyArray<string> =>
   listing
@@ -3541,7 +3541,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
         ),
       );
     }
-    const requiredMembers = [`${stem}/t3`, `${stem}/client`, `${stem}/node_modules`];
+    const requiredMembers = [`${stem}/gcode`, `${stem}/client`, `${stem}/node_modules`];
     const missingMembers = requiredMembers.filter((member) => !members.includes(member));
     const ptyCandidates = [
       `${stem}/node_modules/node-pty/build/Release/pty.node`,
@@ -3956,7 +3956,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: "gcode",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -4288,7 +4288,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   wslRuntime: Flag.String("wsl-runtime").pipe(
     Flag.withDescription(
-      "Path to the Linux CLI release archive (t3-<version>-linux-x64.tar.gz) to embed as the WSL runtime of a Windows build (env: T3CODE_DESKTOP_WSL_RUNTIME).",
+      "Path to the Linux CLI release archive (gcode-<version>-linux-x64.tar.gz) to embed as the WSL runtime of a Windows build (env: T3CODE_DESKTOP_WSL_RUNTIME).",
     ),
     Flag.optional,
   ),

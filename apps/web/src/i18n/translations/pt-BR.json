@@ -1,4 +1,8 @@
 {
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "Comando gcode",
+  "ccf9b9f3089a07b2": "Falha ao carregar o estado do comando gcode.",
   "4bcfa3b976a421cf": "Chat paralelo",
   "23be753133ae6950": "Thread",
   "0001ae5846061bb6": "Thread em {machine}",
@@ -7357,6 +7361,7 @@
   "60b53cc903821cbb": "Falha ao copiar a versão para a área de transferência.",
   "0cb463936215a3cc": "Não foi possível copiar a versão",
   "6d521d61ed177169": "Copiar versão {version}",
+  "25654c1fb38a3107": "Baseado no T3 Code {version}",
   "18040c4f55f3b533": "Versão",
   "fd1d2853467e6195": "Copiar versão",
   "5498f2f33907b02c": "Não foi possível preparar o ACP.",

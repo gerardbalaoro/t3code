@@ -1,3 +1,4 @@
+import { T3_CODE_REPOSITORY, T3_CODE_UPSTREAM_TAG } from "@t3tools/shared/buildProvenance";
 import { msg, T, useGT } from "gt-react";
 
 import { APP_VERSION } from "../../branding";
@@ -26,7 +27,7 @@ export function AboutVersionTitle() {
   });
 
   return (
-    <span className="inline-flex items-baseline gap-2">
+    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
       <span>
         <T>Version</T>
       </span>
@@ -48,6 +49,16 @@ export function AboutVersionTitle() {
           </TooltipPopup>
         </Tooltip>
       </code>
+      {T3_CODE_UPSTREAM_TAG ? (
+        <a
+          className="text-xs font-normal text-muted-foreground underline underline-offset-2"
+          href={`${T3_CODE_REPOSITORY}/releases/tag/${encodeURIComponent(T3_CODE_UPSTREAM_TAG)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {gt("Based on T3 Code {version}", { version: T3_CODE_UPSTREAM_TAG })}
+        </a>
+      ) : null}
     </span>
   );
 }

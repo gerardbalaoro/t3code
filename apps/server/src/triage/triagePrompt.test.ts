@@ -12,7 +12,6 @@ import {
 } from "./triagePrompt.ts";
 
 it("stays byte-identical to .github/triage/PLAYBOOK.md", () => {
-  // Older releases fetch the repository playbook.
   const canonicalPath = NodePath.join(
     import.meta.dirname,
     "../../../../.github/triage/PLAYBOOK.md",
@@ -38,7 +37,11 @@ it("context file labels the CLI version as the CLI's, not the user's build", () 
   assert.notInclude(context, "Release tag");
   assert.include(context, "- Triage CLI version: 0.0.42 (");
   assert.include(context, "version 0.0.43-nightly.20260923.2173");
-  assert.notInclude(context, "runs inside T3 Code");
+  assert.notInclude(context, "runs inside G Code");
+  assert.include(context, "Triage distribution: G Code (T3 Code fork)");
+  assert.include(context, "G Code repository: https://github.com/gerardbalaoro/t3code");
+  assert.include(context, "Upstream T3 Code repository: https://github.com/pingdotgg/t3code");
+  assert.include(context, "Base T3 Code tag for this triage build: unknown");
 });
 
 it("in-app context warns the agent off its own server and points at the clone in progress", () => {
@@ -56,7 +59,7 @@ it("in-app context warns the agent off its own server and points at the clone in
   });
   assert.notInclude(context, "Triage CLI version");
   assert.include(context, "- Started from: T3 Code Desktop version 0.1.1 on macos (");
-  assert.include(context, "## This session runs inside T3 Code");
+  assert.include(context, "## This session runs inside G Code");
   assert.include(context, "/home/u/.t3/source/abc123  (v0.1.1, commit abc123)");
   assert.include(context, "Wait for it instead of\ncloning again.");
 });
