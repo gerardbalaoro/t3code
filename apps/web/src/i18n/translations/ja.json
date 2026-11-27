@@ -13145,5 +13145,10 @@
   "a85651f4c6c5e449": "フォルダーを作成できませんでした。もう一度お試しください。",
   "052cfecdebf6081d": "新しいフォルダー",
   "5b3b63d0c9d04238": "この接続ではフォルダーを作成できません。",
-  "117072c3108e16ff": "新しいフォルダー"
+  "117072c3108e16ff": "新しいフォルダー",
+  "90ae7b89b1e90bf1": "Another gcode at {path} runs first in a new terminal. Remove it to use this one.",
+  "b809cbe6295abf97": "Could not add gcode to PATH",
+  "8603b14caccb672c": "gcode コマンド",
+  "ccf9b9f3089a07b2": "gcode コマンドの状態を読み込めませんでした。",
+  "25654c1fb38a3107": "T3 Code {version} をベースにしています"
 }

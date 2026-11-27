@@ -24,7 +24,7 @@ class DesktopCliCommandLoadError extends Schema.TaggedError<DesktopCliCommandLoa
   { cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return m(msg("Failed to load the t3 command state."));
+    return m(msg("Failed to load the gcode command state."));
   }
 }
 
