@@ -9,6 +9,7 @@ import {
   selectThreadRightPanelState,
   type ThreadRightPanelState,
   useRightPanelStore,
+  withSurfacePlacement,
 } from "./rightPanelStore";
 
 export interface ReopenOwnerState {
@@ -39,7 +40,8 @@ export function planNextReopen(
     }
     const alreadyOpen =
       entry.kind === "panel-tab"
-        ? owner.panel.isOpen && owner.panel.surfaces.some((s) => s.id === entry.surface.id)
+        ? owner.panel.mainSurfaceIds?.includes(entry.surface.id) === true ||
+          (owner.panel.isOpen && owner.panel.surfaces.some((s) => s.id === entry.surface.id))
         : owner.panel.surfaces.some(
             (s) => s.kind === "preview" && s.resourceId === entry.snapshot.tabId,
           );
@@ -111,7 +113,9 @@ export async function reopenClosedView(
         : { colorScheme: view.snapshot.colorScheme }),
     });
     if (result._tag === "Failure") return false;
-    panels.openBrowser(ref, result.value.tabId);
+    withSurfacePlacement(view.placement ?? "sidebar", () =>
+      panels.openBrowser(ref, result.value.tabId),
+    );
     return true;
   }
   const surface = view.surface;
@@ -120,51 +124,53 @@ export async function reopenClosedView(
     (surface.kind === "files" || (surface.kind === "file" && !surface.attachment))
   )
     return false;
-  switch (surface.kind) {
-    case "preview":
-      if (surface.resourceId !== null) return false;
-      panels.openBrowser(ref, null);
-      break;
-    case "file":
-      if (surface.attachment) panels.openAttachment(ref, surface.attachment);
-      else {
-        panels.openFile(ref, surface.relativePath, surface.revealLine ?? undefined);
-        if (typeof surface.folderTrail === "string") {
-          panels.navigateFolder(ref, surface.id, surface.relativePath, surface.folderTrail);
+  return withSurfacePlacement(view.placement ?? "sidebar", () => {
+    switch (surface.kind) {
+      case "preview":
+        if (surface.resourceId !== null) return false;
+        panels.openBrowser(ref, null);
+        break;
+      case "file":
+        if (surface.attachment) panels.openAttachment(ref, surface.attachment);
+        else {
+          panels.openFile(ref, surface.relativePath, surface.revealLine ?? undefined);
+          if (typeof surface.folderTrail === "string") {
+            panels.navigateFolder(ref, surface.id, surface.relativePath, surface.folderTrail);
+          }
         }
+        break;
+      case "files": {
+        const rootAlreadyExists = selectThreadRightPanelState(
+          panels.byThreadKey,
+          rightPanelHostRef(ref),
+        ).surfaces.some((current) => current.kind === "files");
+        panels.open(ref, "files");
+        if (!rootAlreadyExists && typeof surface.folderTrail === "string") {
+          panels.navigateFolder(ref, surface.id, "", surface.folderTrail);
+        }
+        break;
       }
-      break;
-    case "files": {
-      const rootAlreadyExists = selectThreadRightPanelState(
-        panels.byThreadKey,
-        rightPanelHostRef(ref),
-      ).surfaces.some((current) => current.kind === "files");
-      panels.open(ref, "files");
-      if (!rootAlreadyExists && typeof surface.folderTrail === "string") {
-        panels.navigateFolder(ref, surface.id, "", surface.folderTrail);
-      }
-      break;
+      case "device":
+        if (surface.target) {
+          panels.openDevice(ref, surface.target);
+          if (surface.title) panels.renameDevice(ref, surface.id, surface.title);
+        } else panels.open(ref, "device");
+        break;
+      case "pull-request":
+        panels.openPullRequest(ref, surface);
+        break;
+      case "issue":
+        panels.openIssue(ref, surface);
+        break;
+      case "thread":
+        panels.openThread(ref, surface.threadId);
+        break;
+      case "linked-thread":
+        panels.openLinkedThread(ref, surface);
+        break;
+      default:
+        panels.open(ref, surface.kind);
     }
-    case "device":
-      if (surface.target) {
-        panels.openDevice(ref, surface.target);
-        if (surface.title) panels.renameDevice(ref, surface.id, surface.title);
-      } else panels.open(ref, "device");
-      break;
-    case "pull-request":
-      panels.openPullRequest(ref, surface);
-      break;
-    case "issue":
-      panels.openIssue(ref, surface);
-      break;
-    case "thread":
-      panels.openThread(ref, surface.threadId);
-      break;
-    case "linked-thread":
-      panels.openLinkedThread(ref, surface);
-      break;
-    default:
-      panels.open(ref, surface.kind);
-  }
-  return true;
+    return true;
+  });
 }

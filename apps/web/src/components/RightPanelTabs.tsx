@@ -1,3 +1,4 @@
+import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { contextMenuSourceOf } from "../contextMenuSource";
 import { m, type MessageResolver } from "../i18n/messages";
@@ -187,7 +188,13 @@ export interface RightPanelTabsProps {
   /** Overrides the default reason while side chats are available but cannot start. */
   sideChatDisabledReason?: string | null;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
-  children: ReactNode;
+  /**
+   * Renders only the tab bar, with the pinned thread followed by full-width surface tabs.
+   */
+  threadTab?: ReactElement;
+  tabMotionDurationMs?: number;
+  handleNewSurfaceShortcut?: (target: EventTarget | null, desktopMenu: boolean) => boolean;
+  children?: ReactNode;
 }
 
 export interface PullRequestTabStatus {
@@ -346,7 +353,7 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
-function RightPanelEmptyState(props: {
+export interface SurfaceLauncherProps {
   onAddBrowser: () => void;
   onAddBrowserInProfile: (profileId: string) => void;
   browserProfiles: ReadonlyArray<{ readonly id: string; readonly name: string }>;
@@ -367,10 +374,27 @@ function RightPanelEmptyState(props: {
   deviceAvailable: boolean;
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
-}) {
+}
+
+/**
+ * The "Open a surface" list: an empty panel's picker, or the thread header's popover. The popover
+ * takes its letter shortcuts from its own key events, since its open popup blocks the global ones.
+ */
+function SurfaceLauncher(
+  props: SurfaceLauncherProps & {
+    readonly variant?: "panel" | "popover";
+    /** Runs after an entry opens its surface, so a popover can close. */
+    readonly onDidOpen?: () => void;
+  },
+) {
   const gt = useGT();
   const messages = useMessages();
   const [highlight, setHighlight] = useState(-1);
+  const inPopover = props.variant === "popover";
+  const opened = (open: () => void) => () => {
+    open();
+    props.onDidOpen?.();
+  };
 
   const actions = [
     {
@@ -379,7 +403,7 @@ function RightPanelEmptyState(props: {
       shortcut: "B",
       available: props.browserAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.browser),
-      onClick: props.onAddBrowser,
+      onClick: opened(props.onAddBrowser),
     },
     {
       label: msg("Terminal"),
@@ -387,7 +411,7 @@ function RightPanelEmptyState(props: {
       shortcut: "T",
       available: props.terminalAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.terminal),
-      onClick: props.onAddTerminal,
+      onClick: opened(props.onAddTerminal),
     },
     {
       label: msg("Files"),
@@ -395,7 +419,7 @@ function RightPanelEmptyState(props: {
       shortcut: "F",
       available: props.filesAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.files),
-      onClick: props.onAddFiles,
+      onClick: opened(props.onAddFiles),
     },
     {
       label: msg("Diff"),
@@ -403,7 +427,7 @@ function RightPanelEmptyState(props: {
       shortcut: "D",
       available: props.diffAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.diff),
-      onClick: props.onAddDiff,
+      onClick: opened(props.onAddDiff),
     },
     {
       label: msg("Pull request"),
@@ -411,7 +435,7 @@ function RightPanelEmptyState(props: {
       shortcut: "P",
       available: props.pullRequestAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.pullRequest),
-      onClick: props.onAddPullRequest,
+      onClick: opened(props.onAddPullRequest),
     },
     {
       label: msg("Linked items"),
@@ -419,7 +443,7 @@ function RightPanelEmptyState(props: {
       shortcut: "L",
       available: props.pullRequestsAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.pullRequests),
-      onClick: props.onAddPullRequests,
+      onClick: opened(props.onAddPullRequests),
     },
     {
       label: msg("Device"),
@@ -428,7 +452,7 @@ function RightPanelEmptyState(props: {
       shortcut: "M",
       available: props.deviceAvailable,
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.device),
-      onClick: props.onAddDevice,
+      onClick: opened(props.onAddDevice),
     },
     ...(props.onAddSideChat
       ? [
@@ -440,7 +464,7 @@ function RightPanelEmptyState(props: {
             available: props.sideChatAvailable && !props.sideChatDisabledReason,
             disabledReason:
               props.sideChatDisabledReason ?? messages(SURFACE_UNAVAILABLE_HINTS.sideChat),
-            onClick: props.onAddSideChat,
+            onClick: opened(props.onAddSideChat),
           },
         ]
       : []),
@@ -464,14 +488,24 @@ function RightPanelEmptyState(props: {
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a capture-phase window keydown listener for surface shortcuts while the menu is mounted
   useEffect(() => {
+    if (inPopover) return;
     const handler = (event: KeyboardEvent) => handleShortcut(event);
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, []);
+  }, [inPopover]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
     if (availableActions.length === 0) return;
+    if (inPopover && !surfaceShortcutTargetsTypingContext(event.target as Element)) {
+      const action = surfaceShortcutActionForKey(availableActions, event.nativeEvent);
+      if (action) {
+        event.preventDefault();
+        event.stopPropagation();
+        action.onClick();
+        return;
+      }
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowRight") {
       event.preventDefault();
       setHighlight((highlightIndex + 1) % availableActions.length);
@@ -502,28 +536,38 @@ function RightPanelEmptyState(props: {
     const Icon = action.icon;
     return (
       <span className="relative inline-flex shrink-0">
-        <Icon className={iconClassName} />
+        <Icon className={cn(iconClassName, inPopover && "text-muted-foreground")} />
       </span>
     );
   };
 
+  const rowClassName = inPopover
+    ? "flex min-h-8 w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-base sm:min-h-7 sm:text-sm"
+    : "flex h-8 w-full items-center gap-2.5 rounded-(--control-radius) px-2.5 text-left text-sm";
+  const Shortcut = inPopover ? MenuShortcut : Kbd;
+
   return (
     <div
-      data-workspace-focus-default
+      data-workspace-focus-default={inPopover ? undefined : true}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       aria-label={gt("Open a surface")}
-      data-surface-launcher-keys={availableActions.map((action) => action.shortcut).join("")}
+      data-surface-launcher-keys={
+        inPopover ? undefined : availableActions.map((action) => action.shortcut).join("")
+      }
       className={cn(
-        "scrollbar-gutter-both flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 outline-none",
-        "pb-(--workspace-topbar-height)",
+        "scrollbar-gutter-both outline-none",
+        !inPopover &&
+          "flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 pb-(--workspace-topbar-height)",
       )}
     >
-      <div className="w-full max-w-xs py-6">
-        <h3 className="mb-3 text-center font-medium text-foreground text-sm">
-          <T>Open a surface</T>
-        </h3>
-        <div className="flex flex-col gap-0.5">
+      <div className={cn(inPopover ? "w-48 max-w-full p-1" : "w-full max-w-xs py-6")}>
+        {!inPopover ? (
+          <h3 className="mb-3 text-center font-medium text-foreground text-sm">
+            <T>Open a surface</T>
+          </h3>
+        ) : null}
+        <div className={cn("flex flex-col", !inPopover && "gap-0.5")}>
           {actions.map((action) =>
             action.available ? (
               <div
@@ -540,8 +584,10 @@ function RightPanelEmptyState(props: {
                   type="button"
                   onClick={action.onClick}
                   className={cn(
-                    "flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-2.5 text-left text-sm transition-colors group-hover:bg-accent/60",
-                    isHighlighted(action) && "bg-accent/60",
+                    rowClassName,
+                    "cursor-pointer transition-colors",
+                    inPopover ? "group-hover:bg-accent" : "group-hover:bg-accent/60",
+                    isHighlighted(action) && (inPopover ? "bg-accent" : "bg-accent/60"),
                   )}
                 >
                   {actionIcon(action, "size-4")}
@@ -553,7 +599,7 @@ function RightPanelEmptyState(props: {
                   >
                     {messages(action.label)}
                   </span>
-                  <Kbd>{action.shortcut}</Kbd>
+                  <Shortcut>{action.shortcut}</Shortcut>
                 </button>
                 {action.label === "Browser" && props.browserProfiles.length > 1 ? (
                   <Menu>
@@ -573,7 +619,7 @@ function RightPanelEmptyState(props: {
                       {props.browserProfiles.map((profile) => (
                         <MenuItem
                           key={profile.id}
-                          onClick={() => props.onAddBrowserInProfile(profile.id)}
+                          onClick={opened(() => props.onAddBrowserInProfile(profile.id))}
                         >
                           <span className="min-w-0 truncate">{profile.name}</span>
                         </MenuItem>
@@ -590,11 +636,15 @@ function RightPanelEmptyState(props: {
                   <div
                     tabIndex={0}
                     aria-disabled="true"
-                    className="flex h-8 w-full cursor-default items-center gap-2.5 rounded-(--control-radius) px-2.5 text-left text-sm opacity-50"
+                    className={cn(
+                      rowClassName,
+                      "cursor-default",
+                      inPopover ? "opacity-64" : "opacity-50",
+                    )}
                   >
                     {actionIcon(action, "size-4")}
                     <span className="min-w-0 flex-1 truncate">{messages(action.label)}</span>
-                    <Kbd>{action.shortcut}</Kbd>
+                    <Shortcut>{action.shortcut}</Shortcut>
                   </div>
                 }
               />
@@ -606,7 +656,56 @@ function RightPanelEmptyState(props: {
   );
 }
 
-function surfaceTitle(
+export type SurfaceLauncherActions = Omit<SurfaceLauncherProps, "browserProfiles">;
+
+/** The plus button opens another view in its own tab strip. */
+function SurfaceLauncherControl({
+  open,
+  onOpenChange,
+  actions,
+  triggerRef,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly actions: SurfaceLauncherActions;
+  readonly triggerRef?: Ref<HTMLButtonElement>;
+}) {
+  const gt = useGT();
+  const browserProfiles = useBrowserDefaults().profiles;
+  const label = gt("Open a surface");
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <Tooltip>
+        <TooltipTrigger render={<span className="flex shrink-0" />}>
+          <PopoverTrigger
+            ref={triggerRef}
+            render={
+              <Button
+                className="shrink-0 [-webkit-app-region:no-drag]"
+                aria-label={label}
+                variant="ghost-muted"
+                size="icon-xs"
+              />
+            }
+          >
+            <Plus />
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">{label}</TooltipPopup>
+      </Tooltip>
+      <PopoverPopup align="end" side="bottom" padding="none">
+        <SurfaceLauncher
+          {...actions}
+          browserProfiles={browserProfiles}
+          variant="popover"
+          onDidOpen={() => onOpenChange(false)}
+        />
+      </PopoverPopup>
+    </Popover>
+  );
+}
+
+export function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
@@ -1007,7 +1106,7 @@ function RightPanelTab(
     pullRequestStatusSeed: PullRequestTabStatusSeed | undefined;
     renaming: boolean;
     canRename: boolean;
-    ownsDesktopTitleBar: boolean;
+    inDesktopTitleBar: boolean;
   },
 ) {
   const gt = useGT();
@@ -1129,6 +1228,7 @@ function RightPanelTab(
                 }
               }}
               className="cursor-pointer flex min-w-0 items-center"
+              aria-current={props.active ? "page" : undefined}
               aria-pressed={props.active || props.selected}
               aria-label={
                 sideChatState === null
@@ -1160,6 +1260,7 @@ function RightPanelTab(
   );
   return (
     <div
+      data-surface-tab-id={surface.id}
       data-active-tab={props.active}
       data-selected-tab={props.selected || undefined}
       onClick={(event) => {
@@ -1174,7 +1275,7 @@ function RightPanelTab(
       style={{ transform: translation, transition }}
       className={cn(
         "cursor-pointer group/tab flex h-6 max-w-36 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-1.5 text-xs",
-        props.ownsDesktopTitleBar && "[-webkit-app-region:no-drag]",
+        props.inDesktopTitleBar && "[-webkit-app-region:no-drag]",
         props.active
           ? "bg-accent text-foreground"
           : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -1194,8 +1295,71 @@ function RightPanelTab(
 export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
   const gt = useGT();
   const messages = useMessages();
+  const tabRow = useRef<HTMLDivElement>(null);
+  const tabHighlight = useRef<HTMLDivElement>(null);
+  const previousTab = useRef<{ element: HTMLElement; left: number; width: number } | null>(null);
+  const tabSlide = useRef<Animation | null>(null);
+  const activeTabId = props.activeSurfaceId;
+  const duration = props.tabMotionDurationMs ?? 0;
+  const singleTab = props.surfaces.length === 0;
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the selected tab and animates the DOM highlight
+  useLayoutEffect(() => {
+    const row = tabRow.current;
+    const highlight = tabHighlight.current;
+    const selected = row?.querySelector<HTMLElement>(
+      activeTabId === null
+        ? '[data-active-tab="true"]'
+        : `[data-surface-tab-id="${globalThis.CSS.escape(activeTabId)}"]`,
+    );
+    if (!row || !highlight || !selected) return;
+
+    const rowLeft = row.getBoundingClientRect().left;
+    const measure = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left - rowLeft, width: rect.width };
+    };
+    const previous = previousTab.current;
+    const next = measure(selected);
+    const from = tabSlide.current
+      ? measure(highlight)
+      : previous && row.contains(previous.element)
+        ? measure(previous.element)
+        : previous;
+    previousTab.current = { element: selected, ...next };
+    tabSlide.current?.cancel();
+    tabSlide.current = null;
+    highlight.hidden = true;
+    if (
+      !from ||
+      previous?.element === selected ||
+      singleTab ||
+      duration <= 0 ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      typeof highlight.animate !== "function"
+    )
+      return;
+
+    highlight.hidden = false;
+    const slide = highlight.animate(
+      [
+        { left: `${from.left}px`, width: `${from.width}px` },
+        { left: `${next.left}px`, width: `${next.width}px` },
+      ],
+      { duration, easing: "cubic-bezier(0.2, 0.75, 0.25, 1)", fill: "both" },
+    );
+    tabSlide.current = slide;
+    slide.onfinish = () => {
+      if (tabSlide.current !== slide) return;
+      highlight.hidden = true;
+      slide.cancel();
+      tabSlide.current = null;
+    };
+  }, [activeTabId, duration, singleTab]);
   const focusedSurface = props.surfaces.find((surface) => surface.id === props.activeSurfaceId);
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
+  const inDesktopTitleBar =
+    isElectron && (props.mode === "inline" || props.threadTab !== undefined);
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -1345,10 +1509,18 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
   const addSurfaceMenuBlocked = () =>
     !addSurfaceMenuOpen && document.querySelector(LAUNCHER_SHORTCUT_BLOCKING_LAYERS) !== null;
   const onNewSurfaceKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.isComposing) return;
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      props.handleNewSurfaceShortcut?.(event.target, false) === false
+    )
+      return;
     if (
       resolveShortcutCommand(event, props.keybindings, {
-        context: { ...props.getShortcutContext(), rightPanelOpen: true },
+        context: {
+          ...props.getShortcutContext(),
+          threadSurfaceTabs: props.threadTab !== undefined,
+        },
       }) !== "rightPanel.new"
     )
       return;
@@ -1363,7 +1535,12 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
   // Forwarded from a focused browser page. Focusing the trigger here would let ChatView's
   // window-focus handler see a plain button and refocus the composer, closing the menu.
   const onMenuAction = useEffectEvent((action: string) => {
-    if (action === "rightPanel.new" && !addSurfaceMenuBlocked()) setAddSurfaceMenuOpen(true);
+    if (
+      action === "rightPanel.new" &&
+      props.handleNewSurfaceShortcut?.(document.activeElement, true) !== false &&
+      !addSurfaceMenuBlocked()
+    )
+      setAddSurfaceMenuOpen(true);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes document keydown and the desktop menu action (forwarded from a focused browser page) for the new surface shortcut while the panel is open and can add a surface
   useEffect(() => {
@@ -1572,45 +1749,24 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
     };
   };
 
-  return (
-    <PreviewPanelShell
-      workspaceArea
-      workspaceFocusKey={`panel:${props.environmentId}:${props.activeSurfaceId ?? "empty"}`}
-      workspaceLabel={
-        focusedSurface
-          ? gt("Workspace panel: {title}", {
-              title: surfaceTitle(
-                focusedSurface,
-                props.previewSessions,
-                props.terminalLabelsById,
-                messages,
-              ),
-            })
-          : gt("Workspace panel")
-      }
-      mode={props.mode}
-      {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
-      {...(props.open !== undefined ? { open: props.open } : {})}
-      {...(props.widthStorageKey !== undefined ? { widthStorageKey: props.widthStorageKey } : {})}
-      {...(props.defaultWidth !== undefined ? { defaultWidth: props.defaultWidth } : {})}
-      {...(props.inlineSize ? { inlineSize: props.inlineSize } : {})}
-      onMouseDown={preventThumbButtonFocus}
-      onMouseUp={(event) =>
-        takeThumbButtonNavigation(
-          event,
-          focusedSurface?.kind === "preview" ? dispatchPreviewAction : undefined,
-        )
-      }
-    >
+  const strip = props.threadTab !== undefined;
+  const styledTabs = strip || props.tabMotionDurationMs !== undefined;
+  const panelBody = (
+    <>
       <div
         className={cn(
-          "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 pl-2",
-          props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3",
+          "flex shrink-0 items-center gap-1",
+          strip
+            ? "h-full min-w-0 flex-1"
+            : "h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] pl-2",
+          !strip && (props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3"),
           ownsDesktopTitleBar && "drag-region",
           ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         )}
         data-right-panel-tabbar
+        data-thread-tab-strip={styledTabs ? true : undefined}
+        data-thread-tab-titlebar={!strip && styledTabs ? true : undefined}
       >
         <ScrollArea
           radius="none"
@@ -1619,7 +1775,7 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
           scrollFade
           className={cn(
             "min-w-0 flex-1",
-            ownsDesktopTitleBar && tabScrollState.hasOverflow && "[-webkit-app-region:no-drag]",
+            inDesktopTitleBar && tabScrollState.hasOverflow && "[-webkit-app-region:no-drag]",
           )}
           data-right-panel-tab-list
           onKeyDown={(event) => {
@@ -1629,7 +1785,18 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
             clearSelection();
           }}
         >
-          <div className="flex h-full w-max min-w-full items-center gap-1 in-data-dragging-selection:overflow-x-clip">
+          <div
+            data-single-thread-tab={strip && props.surfaces.length === 0 ? true : undefined}
+            ref={styledTabs ? tabRow : undefined}
+            className={cn(
+              "flex h-full w-max min-w-full items-center gap-1 in-data-dragging-selection:overflow-x-clip",
+              styledTabs && "relative isolate gap-1.5 px-2.5 pt-1.5",
+            )}
+          >
+            {styledTabs ? (
+              <div ref={tabHighlight} aria-hidden="true" data-thread-tab-highlight hidden />
+            ) : null}
+            {props.threadTab}
             <SortableTabList
               surfaces={props.surfaces}
               selectedIds={selectedIds}
@@ -1671,7 +1838,7 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
                     pullRequestStatusSeed={props.pullRequestStatusSeeds?.[surface.id]}
                     renaming={renamingDevice === surface.id}
                     canRename={props.onRenameDevice !== undefined}
-                    ownsDesktopTitleBar={ownsDesktopTitleBar}
+                    inDesktopTitleBar={inDesktopTitleBar}
                     onActivate={onActivateTab}
                     onClose={onCloseTab}
                     onAuxClick={onTabAuxClick}
@@ -1682,7 +1849,18 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
                 );
               })}
             </SortableTabList>
-            {props.open !== false && canAddSurface ? (
+            {props.open !== false && canAddSurface && styledTabs ? (
+              <SurfaceLauncherControl
+                open={addSurfaceMenuOpen}
+                onOpenChange={setAddSurfaceMenuOpen}
+                actions={{
+                  ...props,
+                  sideChatAvailable: props.sideChatAvailable ?? false,
+                  sideChatDisabledReason: props.sideChatDisabledReason ?? null,
+                }}
+                triggerRef={addSurfaceTriggerRef}
+              />
+            ) : props.open !== false && canAddSurface ? (
               <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
                 <MenuTrigger
                   ref={addSurfaceTriggerRef}
@@ -1756,6 +1934,9 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
                 </MenuPopup>
               </Menu>
             ) : null}
+            {strip && props.surfaces.length === 0 ? (
+              <div aria-hidden="true" data-thread-tab-recess-fill />
+            ) : null}
           </div>
         </ScrollArea>
         {tabScrollState.hasOverflow ? (
@@ -1817,33 +1998,72 @@ export function RightPanelTabs({ ref, ...props }: RightPanelTabsProps) {
           />
         ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
-        {props.activeSurfaceId === null ? (
-          <RightPanelEmptyState
-            onAddBrowser={props.onAddBrowser}
-            onAddBrowserInProfile={props.onAddBrowserInProfile}
-            browserProfiles={browserProfiles}
-            onAddTerminal={props.onAddTerminal}
-            onAddDiff={props.onAddDiff}
-            onAddFiles={props.onAddFiles}
-            onAddPullRequest={props.onAddPullRequest}
-            onAddPullRequests={props.onAddPullRequests}
-            onAddDevice={props.onAddDevice}
-            onAddSideChat={props.onAddSideChat}
-            browserAvailable={props.browserAvailable}
-            terminalAvailable={props.terminalAvailable}
-            diffAvailable={props.diffAvailable}
-            filesAvailable={props.filesAvailable}
-            pullRequestAvailable={props.pullRequestAvailable}
-            pullRequestsAvailable={props.pullRequestsAvailable}
-            deviceAvailable={props.deviceAvailable}
-            sideChatAvailable={props.sideChatAvailable === true}
-            sideChatDisabledReason={props.sideChatDisabledReason ?? null}
-          />
-        ) : (
-          props.children
-        )}
-      </div>
+      {strip ? null : (
+        <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
+          {props.activeSurfaceId === null ? (
+            <SurfaceLauncher
+              onAddBrowser={props.onAddBrowser}
+              onAddBrowserInProfile={props.onAddBrowserInProfile}
+              browserProfiles={browserProfiles}
+              onAddTerminal={props.onAddTerminal}
+              onAddDiff={props.onAddDiff}
+              onAddFiles={props.onAddFiles}
+              onAddPullRequest={props.onAddPullRequest}
+              onAddPullRequests={props.onAddPullRequests}
+              onAddDevice={props.onAddDevice}
+              onAddSideChat={props.onAddSideChat}
+              browserAvailable={props.browserAvailable}
+              terminalAvailable={props.terminalAvailable}
+              diffAvailable={props.diffAvailable}
+              filesAvailable={props.filesAvailable}
+              pullRequestAvailable={props.pullRequestAvailable}
+              pullRequestsAvailable={props.pullRequestsAvailable}
+              deviceAvailable={props.deviceAvailable}
+              sideChatAvailable={props.sideChatAvailable === true}
+              sideChatDisabledReason={props.sideChatDisabledReason ?? null}
+            />
+          ) : (
+            props.children
+          )}
+        </div>
+      )}
+    </>
+  );
+  if (strip) return panelBody;
+
+  return (
+    <PreviewPanelShell
+      workspaceArea
+      workspaceFocusKey={`panel:${props.environmentId}:${props.activeSurfaceId ?? "empty"}`}
+      workspaceLabel={
+        focusedSurface
+          ? gt("Workspace panel: {title}", {
+              title: surfaceTitle(
+                focusedSurface,
+                props.previewSessions,
+                props.terminalLabelsById,
+                messages,
+              ),
+            })
+          : gt("Workspace panel")
+      }
+      mode={props.mode}
+      {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
+      {...(props.open !== undefined ? { open: props.open } : {})}
+      {...(props.widthStorageKey !== undefined ? { widthStorageKey: props.widthStorageKey } : {})}
+      {...(props.defaultWidth !== undefined ? { defaultWidth: props.defaultWidth } : {})}
+      {...(props.inlineSize ? { inlineSize: props.inlineSize } : {})}
+      onMouseDown={preventThumbButtonFocus}
+      onMouseUp={(event) =>
+        takeThumbButtonNavigation(
+          event,
+          focusedSurface?.kind === "preview"
+            ? (action) => dispatchPreviewAction(action, event.currentTarget)
+            : undefined,
+        )
+      }
+    >
+      {panelBody}
     </PreviewPanelShell>
   );
 }

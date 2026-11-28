@@ -187,7 +187,7 @@ import { resolveResponsiveBrowserViewportSize } from "~/browser/browserViewportL
 import { useBrowserPointerStore } from "~/browser/browserPointerStore";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";
-import { dispatchPreviewAction } from "./previewActionBus";
+import { dispatchPreviewAction, getPreviewActionPlacement } from "./previewActionBus";
 import { PreviewView } from "./PreviewView";
 import { ToastProvider } from "~/components/ui/toast";
 
@@ -463,6 +463,33 @@ describe("PreviewView", () => {
     await expect.element(address).not.toHaveFocus();
     act(() => dispatchPreviewAction("focus-url"));
     await expect.element(address).toHaveFocus();
+  });
+
+  it("targets one browser by pane origin or focus, including the hosted webview", async () => {
+    setup();
+    await using _screen = await render(
+      <>
+        <div data-testid="main-preview">
+          <PreviewView threadRef={TEST_THREAD_REF} tabId="tab-1" placement="main" visible />
+        </div>
+        <div data-testid="sidebar-preview">
+          <PreviewView threadRef={TEST_THREAD_REF} tabId={null} placement="sidebar" visible />
+        </div>
+        <button data-preview-viewport={TEST_RUNTIME_TAB_ID}>Hosted browser</button>
+      </>,
+    );
+    const mainAddress = page.getByTestId("main-preview").getByRole("textbox");
+    const sidebar = page.getByTestId("sidebar-preview");
+    const sidebarAddress = sidebar.getByRole("textbox");
+
+    await userEvent.click(page.getByRole("button", { name: "Hosted browser" }));
+    expect(getPreviewActionPlacement()).toBe("main");
+    await act(() => dispatchPreviewAction("focus-url"));
+    await expect.element(mainAddress).toHaveFocus();
+
+    await act(() => dispatchPreviewAction("focus-url", sidebar.element()));
+    await expect.element(sidebarAddress).toHaveFocus();
+    expect(getPreviewActionPlacement()).toBe("sidebar");
   });
 
   it("does not reopen find when the user returns to a tab they left with find open", async () => {

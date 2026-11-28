@@ -1505,10 +1505,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
 
   const jumpLabelByKey = (() => {
     const mapping = new Map<string, string>();
+    const context = threadShortcutContext(routeThreadRef);
     for (const [index, rowKey] of orderedRowKeys.entries()) {
       const jumpCommand = threadJumpCommandForIndex(index);
       if (!jumpCommand) break;
-      const label = shortcutLabelForCommand(keybindings, jumpCommand);
+      const label = shortcutLabelForCommand(keybindings, jumpCommand, { context });
       if (label) mapping.set(rowKey, label);
     }
     return mapping;
@@ -3029,7 +3030,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       }
       const command = resolveShortcutCommand(event, keybindings, {
         platform: navigator.platform,
-        context: threadShortcutContext(routeThreadRef),
+        context: threadShortcutContext(routeThreadRef, event.target),
       });
       const navigateToRowKey = (targetRowKey: string | null) => {
         if (!targetRowKey) return false;

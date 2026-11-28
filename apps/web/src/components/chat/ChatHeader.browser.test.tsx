@@ -1,4 +1,4 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -102,4 +102,50 @@ it("keeps the Escape that cancels a rename from also reaching window shortcuts",
   await expect.element(input).not.toBeInTheDocument();
   expect(persisted.title).toBe("New thread");
   expect(windowEscapes).toEqual([true]);
+});
+
+it("keeps thread navigation and actions reachable from the pinned title", async () => {
+  const environmentId = EnvironmentId.make("environment");
+  const parentThreadId = ThreadId.make("parent");
+  const onSelect = vi.fn();
+  const onOpenThread = vi.fn();
+  const onNewThreadInProject = vi.fn();
+  openMenu.mockClear();
+
+  await using screen = await render(
+    <ChatHeader
+      activeThreadEnvironmentId={environmentId}
+      activeThreadId={ThreadId.make("child")}
+      activeThreadTitle="Review changes"
+      activeThreadLinkOrigin="Remote"
+      isServerThread
+      activeProject={{
+        environmentId,
+        id: ProjectId.make("project"),
+        title: "Harbor",
+        workspaceRoot: "/workspace/harbor",
+        defaultModelSelection: null,
+        scripts: [],
+        createdAt: "2026-04-01T00:00:00.000Z",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+      }}
+      parentThreadLink={{ threadId: parentThreadId, title: "Implement changes" }}
+      onOpenThread={onOpenThread}
+      rightPanelOpen={false}
+      pinnedTab={{ active: true, onSelect }}
+      onNewThreadInProject={onNewThreadInProject}
+    />,
+  );
+
+  const title = screen.getByRole("heading", { name: "Review changes" }).getByRole("button");
+  await expect.element(title).toHaveAttribute("aria-current", "page");
+  await expect.element(screen.getByText("From Remote")).toBeVisible();
+  await title.click();
+  expect(onSelect).toHaveBeenCalledOnce();
+  await screen.getByRole("button", { name: "Open parent thread: Implement changes" }).click();
+  expect(onOpenThread).toHaveBeenCalledExactlyOnceWith(parentThreadId);
+  await screen.getByRole("button", { name: "New thread in Harbor" }).click();
+  expect(onNewThreadInProject).toHaveBeenCalledOnce();
+  await screen.getByRole("button", { name: "Thread actions for Review changes" }).click();
+  expect(openMenu).toHaveBeenCalledOnce();
 });

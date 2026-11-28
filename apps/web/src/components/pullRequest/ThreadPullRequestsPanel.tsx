@@ -31,6 +31,7 @@ import { findProjectForChangeRequest } from "@t3tools/client-runtime/change-requ
 import { pullRequestLinkPanelTarget, useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useClientSettings } from "~/hooks/useSettings";
 import { usePrimaryEnvironmentId } from "~/state/environments";
+import { type SurfacePlacement, withSurfacePlacement } from "~/rightPanelStore";
 import { usePullRequestIntentPrefetch } from "./usePullRequestIntentPrefetch";
 import { cn } from "~/lib/utils";
 import { useShortcutModifierState } from "~/shortcutModifierState";
@@ -97,6 +98,7 @@ function ChecksGlyph({
 function LinkRowImpl({
   line,
   threadRef,
+  placement,
   projectId,
   speedMode,
   onUnlink,
@@ -106,6 +108,7 @@ function LinkRowImpl({
 }: {
   line: PullRequestListLine;
   threadRef: ScopedThreadRef;
+  placement: SurfacePlacement;
   projectId: ProjectId | null;
   speedMode: boolean;
   onUnlink: (link: ThreadPullRequestLink) => void;
@@ -178,7 +181,9 @@ function LinkRowImpl({
       )}
       <a
         href={link.url}
-        onClick={(event) => openPrLink(event, link.url, threadRef)}
+        onClick={(event) =>
+          withSurfacePlacement(placement, () => openPrLink(event, link.url, threadRef))
+        }
         // Outside drops use the URL; the composer uses this context-chip payload.
         onDragStart={
           snapshot === null
@@ -370,7 +375,11 @@ function LinkRowImpl({
               <LinkIcon className="size-3.5" />
               <T>Copy link</T>
             </MenuItem>
-            <MenuItem onClick={(event) => openPrLink(event, link.url, threadRef)}>
+            <MenuItem
+              onClick={(event) =>
+                withSurfacePlacement(placement, () => openPrLink(event, link.url, threadRef))
+              }
+            >
               <ArrowUpRightIcon className="size-3.5" />
               <T context="verb, open a link">Open</T>
             </MenuItem>
@@ -405,7 +414,13 @@ function latestSyncedAt(links: ReadonlyArray<ThreadPullRequestLink>): string | n
 const lineKey = (line: PullRequestListLine) =>
   `${line.link.host}/${line.link.repository}#${line.link.number}`;
 
-export function ThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThreadRef }) {
+export function ThreadPullRequestsPanel({
+  threadRef,
+  placement = "sidebar",
+}: {
+  threadRef: ScopedThreadRef;
+  placement?: SurfacePlacement;
+}) {
   const gt = useGT();
   const configs = useServerConfigs();
   if (configs.get(threadRef.environmentId) === undefined) {
@@ -416,10 +431,16 @@ export function ThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
       />
     );
   }
-  return <EnabledThreadPullRequestsPanel threadRef={threadRef} />;
+  return <EnabledThreadPullRequestsPanel threadRef={threadRef} placement={placement} />;
 }
 
-function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThreadRef }) {
+function EnabledThreadPullRequestsPanel({
+  threadRef,
+  placement,
+}: {
+  threadRef: ScopedThreadRef;
+  placement: SurfacePlacement;
+}) {
   const gt = useGT();
   const thread = useThreadShell(threadRef);
   const issues = thread?.issues ?? [];
@@ -503,6 +524,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
 
   // Legend rows update only for data/extraData changes; include all external inputs.
   const rowInputs = {
+    placement,
     speedMode,
     environmentProjects,
     capabilities,
@@ -554,6 +576,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
                     threadRef={threadRef}
                     compact={false}
                     mountScope="linked-items"
+                    placement={placement}
                   />
                 </section>
                 {linkCount > 0 ? (
@@ -568,6 +591,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
             <LinkRow
               line={line}
               threadRef={threadRef}
+              placement={placement}
               projectId={
                 capabilities !== undefined
                   ? (findProjectForChangeRequest(environmentProjects, line.link)?.id ??

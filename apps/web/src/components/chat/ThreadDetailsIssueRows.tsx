@@ -5,7 +5,7 @@ import { MessageSquareIcon } from "lucide-react";
 import { useState, type MouseEvent } from "react";
 
 import { cn } from "~/lib/utils";
-import { useRightPanelStore } from "~/rightPanelStore";
+import { type SurfacePlacement, useRightPanelStore, withSurfacePlacement } from "~/rightPanelStore";
 import { useServerConfigs } from "~/state/entities";
 import { useLinkedIssueDetail } from "~/state/issues";
 
@@ -28,12 +28,14 @@ function LinkedIssueRow({
   threadRef,
   compact,
   mountScope,
+  placement,
   onOpen,
 }: {
   link: ThreadIssueLink;
   threadRef: ScopedThreadRef;
   compact: boolean;
   mountScope: "thread-details" | "linked-items" | "sidebar-tooltip";
+  placement: SurfacePlacement;
   onOpen: (() => void) | undefined;
 }) {
   const gt = useGT();
@@ -53,7 +55,9 @@ function LinkedIssueRow({
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       if (configs.get(threadRef.environmentId)?.environment.capabilities.issues !== true) return;
       event.preventDefault();
-      useRightPanelStore.getState().openIssue(threadRef, link);
+      withSurfacePlacement(placement, () =>
+        useRightPanelStore.getState().openIssue(threadRef, link),
+      );
       onOpen?.();
     },
   };
@@ -147,12 +151,14 @@ export function ThreadDetailsIssueRows({
   threadRef,
   compact = true,
   mountScope = "thread-details",
+  placement = "sidebar",
   onOpen,
 }: {
   links: ReadonlyArray<ThreadIssueLink>;
   threadRef: ScopedThreadRef;
   compact?: boolean;
   mountScope?: "thread-details" | "linked-items" | "sidebar-tooltip";
+  placement?: SurfacePlacement;
   onOpen?: () => void;
 }) {
   const [expandedThread, setExpandedThread] = useState<string | null>(null);
@@ -165,6 +171,7 @@ export function ThreadDetailsIssueRows({
       threadRef={threadRef}
       compact={compact}
       mountScope={mountScope}
+      placement={placement}
       onOpen={onOpen}
     />
   );

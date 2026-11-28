@@ -14,7 +14,9 @@ import {
   selectActiveRightPanelSurface,
   selectThreadPanelVisibility,
   selectThreadRightPanelState,
+  surfacesInPlacement,
   useRightPanelStore,
+  withSurfacePlacement,
 } from "./rightPanelStore";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
@@ -41,6 +43,161 @@ async function reloadRightPanelStore() {
 }
 
 describe("rightPanelStore", () => {
+  it("keeps the full-width selection independent from sidebar visibility and closes", async () => {
+    const store = useRightPanelStore.getState();
+    const current = () =>
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    withSurfacePlacement("main", () => store.open(refA, "diff"));
+    store.open(refA, "files");
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "files",
+      mainActiveSurfaceId: "diff",
+    });
+    expect(surfacesInPlacement(current(), "main").map((surface) => surface.id)).toEqual(["diff"]);
+    expect(surfacesInPlacement(current(), "sidebar").map((surface) => surface.id)).toEqual([
+      "files",
+    ]);
+
+    await reloadRightPanelStore();
+    store.close(refA);
+    expect(current()).toMatchObject({ isOpen: false, mainActiveSurfaceId: "diff" });
+    store.show(refA);
+    store.closeSurface(refA, "diff");
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "files",
+      mainActiveSurfaceId: null,
+    });
+  });
+
+  it("reconciles browser sessions and unavailable files in their own panes", () => {
+    const store = useRightPanelStore.getState();
+    const current = () =>
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    store.show(refA);
+    withSurfacePlacement("main", () => store.openBrowser(refA, "main"));
+    store.reconcileBrowserSurfaces(refA, ["main"]);
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: null,
+      mainActiveSurfaceId: "browser:main",
+    });
+    store.reconcileBrowserSurfaces(refA, ["main", "side"]);
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "browser:side",
+      mainActiveSurfaceId: "browser:main",
+    });
+    withSurfacePlacement("main", () => store.openFile(refA, "src/main.ts"));
+    store.reconcileFileSurfaces(refA, false);
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "browser:side",
+      mainActiveSurfaceId: "browser:main",
+    });
+    store.reconcileBrowserSurfaces(refA, ["side"]);
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "browser:side",
+      mainSurfaceIds: [],
+      mainActiveSurfaceId: null,
+    });
+  });
+
+  it("keeps automatic and implicit opens from moving existing main tabs", () => {
+    const store = useRightPanelStore.getState();
+    const current = () =>
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    withSurfacePlacement("main", () => store.open(refA, "diff"));
+    withSurfacePlacement("main", () => store.close(refA));
+    expect(
+      store.openProactive(
+        refA,
+        { kind: "diff", turnId: RunId.make("turn") },
+        store.getUserActionRevision(refA),
+      ),
+    ).toBe(false);
+    expect(current()).toMatchObject({
+      isOpen: false,
+      mainSurfaceIds: ["diff"],
+      mainActiveSurfaceId: null,
+    });
+    store.open(refA, "diff");
+    expect(current()).toMatchObject({
+      isOpen: false,
+      mainSurfaceIds: ["diff"],
+      mainActiveSurfaceId: "diff",
+    });
+    withSurfacePlacement("sidebar", () => store.open(refA, "diff"));
+    expect(current()).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "diff",
+      mainSurfaceIds: [],
+      mainActiveSurfaceId: null,
+    });
+  });
+
+  it("hides a sidebar when its last tab moves to the main strip", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "diff");
+    withSurfacePlacement("main", () => store.open(refA, "diff"));
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({
+      isOpen: false,
+      activeSurfaceId: null,
+      mainActiveSurfaceId: "diff",
+    });
+  });
+
+  it("reopens a closed full-width tab in the same pane", async () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    withSurfacePlacement("main", () => store.open(refA, "diff"));
+    store.closeSurface(refA, "diff");
+    const entry = useClosedViewStore.getState().entries[0]!;
+    expect(entry).toMatchObject({ kind: "panel-tab", placement: "main" });
+    await reopenClosedView(entry, {
+      openPreview: async () => {
+        throw new Error("Only browser tabs use this");
+      },
+      workspaceAvailable: true,
+    });
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({
+      activeSurfaceId: "files",
+      mainActiveSurfaceId: "diff",
+    });
+  });
+
+  it("validates saved pane selections independently on hydration", async () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    withSurfacePlacement("main", () => store.open(refA, "diff"));
+    useRightPanelStore.setState(({ byThreadKey }) => ({
+      byThreadKey: {
+        ...byThreadKey,
+        "env-1:thread-A": {
+          ...selectThreadRightPanelState(byThreadKey, refA),
+          mainSurfaceIds: ["diff", "unknown", "diff"],
+          mainActiveSurfaceId: "files",
+          activeSurfaceId: "diff",
+        },
+      },
+    }));
+    await reloadRightPanelStore();
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({
+      isOpen: true,
+      activeSurfaceId: "files",
+      mainSurfaceIds: ["diff"],
+      mainActiveSurfaceId: null,
+    });
+  });
+
   it("opens a hosted side chat's panel actions in its parent's panel until unhosted", () => {
     const store = useRightPanelStore.getState();
     const unhost = hostRightPanel(refB, refA);

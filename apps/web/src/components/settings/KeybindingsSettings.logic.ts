@@ -486,6 +486,10 @@ const COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "terminal.next": msg("Terminal: Next"),
   "rightPanel.toggle": msg("Right Panel: Toggle"),
   "rightPanel.new": msg("Right Panel: New"),
+  "tab.next": msg("Tabs: Next Tab"),
+  "tab.previous": msg("Tabs: Previous Tab"),
+  "tab.thread": msg("Tabs: Return to Thread"),
+  "pullRequests.open": msg("Open Pull Requests"),
   "threadPanel.toggle": msg("Thread Panel: Toggle"),
   "rightPanel.toggleMaximized": msg("Right Panel: Toggle Maximized"),
   "rightPanel.close": msg("Right Panel: Close"),
@@ -558,6 +562,9 @@ export function commandLabel(command: KeybindingCommand, resolve: MessageResolve
   const lateLabel = LATE_COMMAND_LABELS[command];
   if (lateLabel) return resolve(lateLabel);
   const raw = String(command);
+  if (raw.startsWith("tab.jump.")) {
+    return resolve(msg("Tabs: Jump to Tab {n}", { n: raw.slice("tab.jump.".length) }));
+  }
   if (raw.startsWith("thread.jump.")) {
     return resolve(msg("Thread: Jump: {n}", { n: raw.slice("thread.jump.".length) }));
   }

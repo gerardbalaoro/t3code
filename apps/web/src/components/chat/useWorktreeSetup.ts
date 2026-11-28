@@ -1,3 +1,4 @@
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import type {
   EnvironmentId,
@@ -73,13 +74,14 @@ export function useWorktreeSetup(input: {
       : null,
   );
   const latestSnapshot = snapshotQuery.data;
+  const routeKey = scopedThreadKey(routeThreadRef);
   const [heldFor, setHeldFor] = useState<{
-    readonly routeThreadRef: ScopedThreadRef;
+    readonly routeKey: string;
     readonly latestSnapshot: WorktreeSetupSnapshot | null | undefined;
-  }>({ routeThreadRef, latestSnapshot: null });
-  if (heldFor.routeThreadRef !== routeThreadRef || heldFor.latestSnapshot !== latestSnapshot) {
-    const routeChanged = heldFor.routeThreadRef !== routeThreadRef;
-    setHeldFor({ routeThreadRef, latestSnapshot });
+  }>({ routeKey, latestSnapshot: null });
+  if (heldFor.routeKey !== routeKey || heldFor.latestSnapshot !== latestSnapshot) {
+    const routeChanged = heldFor.routeKey !== routeKey;
+    setHeldFor({ routeKey, latestSnapshot });
     if (routeChanged) {
       setHeldSnapshot(null);
     } else if (latestSnapshot) {

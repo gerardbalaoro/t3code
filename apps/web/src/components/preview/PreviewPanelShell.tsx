@@ -22,6 +22,7 @@ export type PreviewPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
 interface PreviewPanelShellProps {
   workspaceArea?: boolean;
+  workspaceAreaName?: string;
   workspaceFocusKey?: string;
   workspaceLabel?: string;
   mode: PreviewPanelMode;
@@ -70,7 +71,11 @@ function PreviewPanelShellFrame(
   props: PreviewPanelShellProps & { inlineSize: PreviewPanelInlineSize },
 ) {
   const gt = useGT();
-  const panelArea = workspaceAreaProps("panel", 4, props.workspaceLabel ?? gt("Workspace panel"));
+  const panelArea = workspaceAreaProps(
+    props.workspaceAreaName ?? "panel",
+    4,
+    props.workspaceLabel ?? gt("Workspace panel"),
+  );
   const isInline = props.mode === "inline";
   const collapsible = isInline && props.open !== undefined;
   const open = props.open ?? true;

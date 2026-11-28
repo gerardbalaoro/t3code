@@ -2,7 +2,11 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { expect, it } from "vite-plus/test";
 
-import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectThreadRightPanelState,
+  useRightPanelStore,
+  withSurfacePlacement,
+} from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { cycleThreadTerminal } from "./cycleThreadTerminal";
 import { registerTerminalFocusTarget } from "./terminalFocus";
@@ -90,4 +94,24 @@ it("cycles panel terminal surfaces and splits without changing the drawer", () =
   ).toBe("drawer");
   panels.close(ref);
   expect(cycleThreadTerminal(ref, "right-panel", "next")).toBe(false);
+});
+
+it("cycles only terminals from the focused surface pane", () => {
+  const ref = setup();
+  const panels = useRightPanelStore.getState();
+  panels.openTerminal(ref, "side");
+  withSurfacePlacement("main", () => {
+    panels.openTerminal(ref, "main-a");
+    panels.openTerminal(ref, "main-b");
+  });
+  expect(cycleThreadTerminal(ref, "right-panel", "next", "main")).toBe(true);
+  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, ref)).toMatchObject(
+    {
+      activeSurfaceId: "terminal:side",
+      mainActiveSurfaceId: "terminal:main-a",
+    },
+  );
+  panels.close(ref);
+  expect(cycleThreadTerminal(ref, "right-panel", "next", "main")).toBe(true);
+  expect(cycleThreadTerminal(ref, "right-panel", "next", "sidebar")).toBe(false);
 });

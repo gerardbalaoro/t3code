@@ -1515,7 +1515,8 @@ function FilePreviewPanelContent({
       );
     const path = row?.getAttribute("data-item-path");
     if (!path || path.endsWith("/")) return;
-    requestWorkspaceFocus({ area: "panel", selector: "[data-file-content-focus]" });
+    const area = row?.closest("[data-workspace-area]")?.getAttribute("data-workspace-area");
+    requestWorkspaceFocus({ area: area ?? "panel", selector: "[data-file-content-focus]" });
   };
   const rendered = isMermaid
     ? renderMermaid

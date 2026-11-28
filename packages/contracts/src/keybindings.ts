@@ -55,7 +55,26 @@ const MODEL_PICKER_KEYBINDING_COMMANDS = [
   ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
 ] as const;
 
+export const TAB_JUMP_KEYBINDING_COMMANDS = [
+  "tab.jump.2",
+  "tab.jump.3",
+  "tab.jump.4",
+  "tab.jump.5",
+  "tab.jump.6",
+  "tab.jump.7",
+  "tab.jump.8",
+  "tab.jump.9",
+] as const;
+export const TAB_NAVIGATION_COMMANDS = [
+  "tab.next",
+  "tab.previous",
+  "tab.thread",
+  ...TAB_JUMP_KEYBINDING_COMMANDS,
+] as const;
+
 export const STATIC_KEYBINDING_COMMANDS = [
+  ...TAB_NAVIGATION_COMMANDS,
+  "pullRequests.open",
   "workspace.focusNext",
   "workspace.focusPrevious",
   "sidebar.toggle",

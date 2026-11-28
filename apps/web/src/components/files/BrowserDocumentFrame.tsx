@@ -5,6 +5,7 @@ import {
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
   type ScopedThreadRef,
   THREAD_JUMP_KEYBINDING_COMMANDS,
+  TAB_NAVIGATION_COMMANDS,
 } from "@t3tools/contracts";
 import {
   type FilePreviewScroll,
@@ -73,6 +74,7 @@ const HTML_RENDER_SHORTCUT_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
   "thread.previous",
   "thread.next",
   ...THREAD_JUMP_KEYBINDING_COMMANDS,
+  ...TAB_NAVIGATION_COMMANDS,
   ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
 ]);
 

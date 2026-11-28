@@ -16,10 +16,12 @@ import { focusPanelTerminalAfterClose } from "../lib/terminalFocus";
 import { readLocalApi } from "../localApi";
 import { setActivePreviewTab, useThreadPreviewState } from "../previewStateStore";
 import {
-  selectActiveRightPanelSurface,
+  surfacePlacementOf,
   selectThreadRightPanelState,
   useRightPanelStore,
   type RightPanelSurface,
+  surfacesInPlacement,
+  type SurfacePlacement,
 } from "../rightPanelStore";
 import { readThreadShell, waitForThreadShellRemoval } from "../state/entities";
 import { previewEnvironment } from "../state/preview";
@@ -47,11 +49,12 @@ export function useRightPanelSurfaceClose(input: {
   const previewState = useThreadPreviewState(threadRef);
   const terminalActions = useThreadTerminalActions(threadRef);
   const storeCloseTerminal = useTerminalUiStateStore((state) => state.closeTerminal);
-  const surfaces = useRightPanelStore(
-    (state) => selectThreadRightPanelState(state.byThreadKey, threadRef).surfaces,
-  );
 
-  const releaseSurfaceResources = (ref: ScopedThreadRef, surface: RightPanelSurface) => {
+  const releaseSurfaceResources = (
+    ref: ScopedThreadRef,
+    surface: RightPanelSurface,
+    placement: SurfacePlacement,
+  ) => {
     // Without preview access, server state remains until an authorized close or restart.
     if (canOperatePreview && surface.kind === "preview" && surface.resourceId) {
       void closePreviewSession({
@@ -59,6 +62,7 @@ export function useRightPanelSurfaceClose(input: {
         snapshot: previewState.sessions[surface.resourceId] ?? null,
         tabId: surface.resourceId,
         threadRef: ref,
+        placement,
       });
     }
     if (
@@ -120,30 +124,34 @@ export function useRightPanelSurfaceClose(input: {
   const finishClose = (toClose: readonly RightPanelSurface[]) => {
     if (!threadRef) return;
     const store = useRightPanelStore.getState();
-    const { activeSurfaceId, surfaces } = selectThreadRightPanelState(store.byThreadKey, threadRef);
-    const openIds = new Set(surfaces.map((surface) => surface.id));
+    const before = selectThreadRightPanelState(store.byThreadKey, threadRef);
+    const openIds = new Set(before.surfaces.map((surface) => surface.id));
     const closingSurfaces = toClose.filter((surface) => openIds.has(surface.id));
-    if (closingSurfaces.length === 0) return;
+    const firstSurface = closingSurfaces[0];
+    if (!firstSurface) return;
+    const placement = surfacePlacementOf(before, firstSurface.id);
+    const activeId = placement === "main" ? before.mainActiveSurfaceId : before.activeSurfaceId;
     // Close the tabs before releasing sessions, which can prune the tabs during reconciliation.
     store.closeSurfaces(
       threadRef,
       closingSurfaces.map((surface) => surface.id),
     );
-    // The active tab's session closes last so reopening restores it first.
+    // Close the active tab's session last so reopening restores it first.
     const releaseOrder = closingSurfaces.toSorted(
-      (left, right) => Number(left.id === activeSurfaceId) - Number(right.id === activeSurfaceId),
+      (left, right) => Number(left.id === activeId) - Number(right.id === activeId),
     );
     for (const surface of releaseOrder) {
-      releaseSurfaceResources(threadRef, surface);
+      releaseSurfaceResources(threadRef, surface, surfacePlacementOf(before, surface.id));
     }
-    const nextActiveSurface = selectActiveRightPanelSurface(
-      useRightPanelStore.getState().byThreadKey,
-      threadRef,
+    const after = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+    const nextActiveId = placement === "main" ? after.mainActiveSurfaceId : after.activeSurfaceId;
+    const nextActiveSurface = surfacesInPlacement(after, placement).find(
+      (surface) => surface.id === nextActiveId,
     );
     if (nextActiveSurface?.kind === "preview" && nextActiveSurface.resourceId) {
       setActivePreviewTab(threadRef, nextActiveSurface.resourceId);
     }
-    focusPanelTerminalAfterClose(threadRef, activeSurfaceId);
+    focusPanelTerminalAfterClose(threadRef, activeId, placement);
   };
   const labelFor = (terminalId: string) =>
     terminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId, m);
@@ -188,15 +196,30 @@ export function useRightPanelSurfaceClose(input: {
       },
     );
   });
+  const laneSurfaces = (surface: RightPanelSurface) => {
+    const panel = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+    return surfacesInPlacement(
+      panel,
+      panel.mainSurfaceIds?.includes(surface.id) ? "main" : "sidebar",
+    );
+  };
   const closeOtherSurfaces = useStableCallback((surface: RightPanelSurface) =>
-    closeSurfaces(surfaces.filter((entry) => entry.id !== surface.id)),
+    closeSurfaces(laneSurfaces(surface).filter((entry) => entry.id !== surface.id)),
   );
   const closeSurfacesToRight = useStableCallback((surface: RightPanelSurface) => {
+    const surfaces = laneSurfaces(surface);
     const surfaceIndex = surfaces.findIndex((entry) => entry.id === surface.id);
     if (surfaceIndex < 0) return;
     closeSurfaces(surfaces.slice(surfaceIndex + 1));
   });
-  const closeAllSurfaces = useStableCallback(() => closeSurfaces(surfaces));
+  const closeAllSurfaces = useStableCallback((placement: SurfacePlacement = "sidebar") =>
+    closeSurfaces(
+      surfacesInPlacement(
+        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef),
+        placement,
+      ),
+    ),
+  );
   const closeSelectedSurfaces = useStableCallback(closeSurfaces);
 
   return {

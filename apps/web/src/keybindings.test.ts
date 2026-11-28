@@ -1158,3 +1158,30 @@ describe("Usage shortcuts", () => {
     );
   });
 });
+
+describe("surface tab defaults", () => {
+  const resolve = (key: string, context = {}, shiftKey = false) =>
+    resolveShortcutCommand(event({ key, ctrlKey: true, shiftKey }), DEFAULT_RESOLVED_KEYBINDINGS, {
+      platform: "Linux x86_64",
+      context: { isDesktop: true, ...context },
+    });
+
+  it("prefers tab shortcuts in an active strip while preserving thread and model jumps", () => {
+    assert.equal(resolve("1"), "thread.jump.1");
+    assert.equal(resolve("1", { surfaceTabReturn: true }), "tab.thread");
+    assert.equal(resolve("2", { surfaceTabNavigation: true }), "tab.jump.2");
+    assert.equal(resolve("9", { surfaceTabNavigation: true }), "tab.jump.9");
+    assert.equal(
+      resolve("2", { surfaceTabNavigation: true, modelPickerOpen: true }),
+      "modelPicker.jump.2",
+    );
+    assert.equal(resolve("Tab", { surfaceTabNavigation: true }), "tab.next");
+    assert.equal(resolve("Tab", { surfaceTabNavigation: true }, true), "tab.previous");
+  });
+
+  it("gives Mod+L to the preview while focused and leaves terminals alone", () => {
+    assert.equal(resolve("l"), "pullRequests.open");
+    assert.equal(resolve("l", { previewFocus: true }), "preview.focusUrl");
+    assert.equal(resolve("l", { terminalFocus: true }), null);
+  });
+});

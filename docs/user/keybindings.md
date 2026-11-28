@@ -38,6 +38,17 @@ Remap under **Copy Link or Thread** and **Copy Number** in **Settings → Keybin
 - **Diffs** (`mod+f` inside a diff or PR Code tab): Searches all loaded files in the diff, unfolding matching files. Not configurable. Very large uncommitted diffs only search files loaded so far.
 - **Browser page** (`preview.find`, default `mod+f` in a desktop browser tab): Searches the open page. If a page handles `mod+f` itself, use the browser's **⋮** menu. Not supported in web clients or streamed browser tabs.
 
+## Workspace tabs
+
+Use `Ctrl+Tab` and `Ctrl+Shift+Tab` to cycle through tabs in the focused pane.
+The main strip includes the thread in that cycle. Press `mod+1` to return to
+the thread from a full-width tab or the right sidebar. Press `mod+2` through
+`mod+9` to select the first through eighth surface tab in the focused pane.
+
+Press `mod+l` to open Pull Requests. Inside a browser preview, that shortcut
+focuses the URL field. In an ordinary browser window, the browser may reserve
+these chords. Use the desktop app or customize the bindings in Settings.
+
 ## Hardware keyboards on iPad and Android
 
 - **iPad**: `Cmd+1`–`Cmd+9` open the first nine visible threads; `Cmd+K` opens the command palette (prefix with `>` for actions only); `Cmd+Shift+H` cycles host on a new thread. `Return` sends (`Shift+Return` for newline; `Cmd+Return` for opposite follow-up). Change Return behavior in **Settings → Keyboard**.
@@ -64,7 +75,7 @@ Join modifiers and keys with `+` (`mod`, `cmd`/`meta`, `ctrl`/`control`, `alt`/`
 
 ### When conditions
 
-Available context keys: `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, `rightPanelOpen`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`, `draftThreadRoute`, `turnRunning`, `composerEmpty`, `editableFocus`, `isWeb`, `isDesktop`. Unknown keys evaluate to `false`.
+Available context keys: `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, `rightPanelOpen`, `threadSurfaceTabs`, `surfaceTabNavigation`, `surfaceTabReturn`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`, `draftThreadRoute`, `turnRunning`, `composerEmpty`, `editableFocus`, `isWeb`, `isDesktop`. Unknown keys evaluate to `false`.
 
 Combine with `!`, `&&`, `||`, and parentheses:
 

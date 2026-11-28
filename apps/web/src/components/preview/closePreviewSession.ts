@@ -7,6 +7,7 @@ import type {
 } from "@t3tools/contracts";
 
 import { rendersServerTabNatively } from "~/browser/previewRuntime";
+import type { SurfacePlacement } from "~/rightPanelStore";
 import { useClosedViewStore } from "~/closedViewStore";
 import { beginPreviewSessionClose, cancelPreviewSessionClose } from "~/previewStateStore";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -20,6 +21,7 @@ interface ClosePreviewSessionInput<E> {
   readonly snapshot: PreviewSessionSnapshot | null;
   readonly tabId: string;
   readonly threadRef: ScopedThreadRef;
+  readonly placement?: SurfacePlacement;
 }
 
 export async function closePreviewSession<E>(
@@ -47,6 +49,7 @@ export async function closePreviewSession<E>(
       kind: "browser",
       threadRef: input.threadRef,
       snapshot: input.snapshot,
+      ...(input.placement === "main" ? { placement: "main" } : {}),
     });
   }
   return result;

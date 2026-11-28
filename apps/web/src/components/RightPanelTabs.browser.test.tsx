@@ -1,7 +1,11 @@
 import "~/index.css";
 
 import { EnvironmentId } from "@t3tools/contracts";
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import {
+  compileResolvedKeybindingsConfig,
+  DEFAULT_RESOLVED_KEYBINDINGS,
+  mergeWithDefaultKeybindings,
+} from "@t3tools/shared/keybindings";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { commands, page, userEvent } from "vite-plus/test/browser";
 
@@ -162,6 +166,7 @@ function panel(activeSurface: RightPanelSurface) {
       terminalOpen: false,
       previewFocus: false,
       previewOpen: true,
+      rightPanelOpen: true,
       isWeb: true,
       isDesktop: false,
     }),
@@ -347,6 +352,43 @@ describe("device tab rename", () => {
 });
 
 describe("add surface launcher", () => {
+  it("opens the full-width launcher by default and respects a shortcut for a closed sidebar", async () => {
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const props = panel(DIFF_SURFACE).props as RightPanelTabsProps;
+    const tabs = (keybindings: RightPanelTabsProps["keybindings"]) => (
+      <RightPanelTabs
+        {...props}
+        keybindings={keybindings}
+        mode="embedded"
+        getShortcutContext={() => ({ ...props.getShortcutContext(), rightPanelOpen: false })}
+        threadTab={<button type="button">Conversation title</button>}
+      />
+    );
+
+    await using screen = await render(tabs(DEFAULT_RESOLVED_KEYBINDINGS));
+    await expect
+      .element(screen.getByRole("button", { name: "Diff" }))
+      .toHaveAttribute("aria-current", "page");
+    await userEvent.keyboard("{Control>}t{/Control}");
+    await expect
+      .element(page.getByRole("dialog").getByRole("button", { name: /^Files/ }))
+      .toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+
+    await screen.rerender(
+      tabs(
+        mergeWithDefaultKeybindings(
+          compileResolvedKeybindingsConfig([
+            { key: "mod+t", command: "rightPanel.toggle", when: "!rightPanelOpen" },
+          ]),
+        ),
+      ),
+    );
+    await userEvent.keyboard("{Control>}t{/Control}");
+    await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("hides the button, closes the open menu and stops taking Mod+T and the desktop menu action once no surface can be added", async () => {
     const menuListeners = new Set<(action: string) => void>();
     using _bridge = stubGlobal("desktopBridge", {

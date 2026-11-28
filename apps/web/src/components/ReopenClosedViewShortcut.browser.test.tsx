@@ -463,8 +463,9 @@ describe("root reopen shortcut", () => {
     });
   });
 
-  it("forwards address-bar focus, zoom, and panel new and close from a focused desktop page", async () => {
+  it("forwards preview and tab commands from a focused desktop page", async () => {
     setup();
+    state.params = ref;
     await using _shortcut = await renderShortcut();
     expect(state.setShortcuts).toHaveBeenLastCalledWith(
       expect.arrayContaining(
@@ -475,6 +476,10 @@ describe("root reopen shortcut", () => {
           "preview.resetZoom",
           "rightPanel.new",
           "rightPanel.close",
+          "tab.next",
+          "tab.previous",
+          "tab.thread",
+          "tab.jump.2",
         ].map((command) => expect.objectContaining({ command })),
       ),
     );

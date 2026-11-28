@@ -1,7 +1,11 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
-import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectThreadRightPanelState,
+  useRightPanelStore,
+  type SurfacePlacement,
+} from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 
 export type TerminalFocusOwner = "drawer" | "right-panel";
@@ -91,12 +95,20 @@ export function focusActiveDrawerTerminal(threadRef: ScopedThreadRef): void {
 }
 
 /** Focuses the active terminal of the right panel when it shows a terminal surface. */
-export function focusActivePanelTerminal(threadRef: ScopedThreadRef): void {
-  const { isOpen, activeSurfaceId, surfaces } = selectThreadRightPanelState(
-    useRightPanelStore.getState().byThreadKey,
-    threadRef,
+export function focusActivePanelTerminal(
+  threadRef: ScopedThreadRef,
+  placement: SurfacePlacement = "sidebar",
+): void {
+  const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+  const surface = state.surfaces.find(
+    (candidate) =>
+      candidate.id ===
+      (placement === "main"
+        ? state.mainActiveSurfaceId
+        : state.isOpen
+          ? state.activeSurfaceId
+          : null),
   );
-  const surface = isOpen ? surfaces.find((candidate) => candidate.id === activeSurfaceId) : null;
   if (surface?.kind === "terminal") focusTerminal(threadRef, surface.activeTerminalId);
 }
 
@@ -107,12 +119,11 @@ export function focusActivePanelTerminal(threadRef: ScopedThreadRef): void {
 export function focusPanelTerminalAfterClose(
   threadRef: ScopedThreadRef,
   previousActiveSurfaceId: string | null,
+  placement: SurfacePlacement = "sidebar",
 ): void {
-  const { activeSurfaceId } = selectThreadRightPanelState(
-    useRightPanelStore.getState().byThreadKey,
-    threadRef,
-  );
-  if (activeSurfaceId !== previousActiveSurfaceId) focusActivePanelTerminal(threadRef);
+  const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+  const activeSurfaceId = placement === "main" ? state.mainActiveSurfaceId : state.activeSurfaceId;
+  if (activeSurfaceId !== previousActiveSurfaceId) focusActivePanelTerminal(threadRef, placement);
 }
 
 /**
