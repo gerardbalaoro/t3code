@@ -397,14 +397,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "surface-layout",
-    title: msg("Open views as"),
-    to: "/settings/appearance",
-    searchTerms: [
-      msg("tabs sidebar panel surfaces browser terminal files diff layout open full width"),
-    ],
-  },
-  {
     id: "effort-display",
     title: msg("Effort display"),
     to: "/settings/appearance",

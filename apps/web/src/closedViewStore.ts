@@ -12,15 +12,25 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { decodeLinkedThreadSurface } from "./linkedThreadSurface";
 import { resolveStorage } from "./lib/storage";
 import { randomUUID } from "./lib/utils";
-import { decodeThreadSurface, type RightPanelSurface } from "./rightPanelStore";
+import {
+  decodeThreadSurface,
+  type RightPanelSurface,
+  type SurfacePlacement,
+} from "./rightPanelStore";
 
 export type ClosedView =
   | {
       kind: "panel-tab";
       threadRef: ScopedThreadRef;
+      placement?: SurfacePlacement;
       surface: Exclude<RightPanelSurface, { kind: "terminal" }>;
     }
-  | { kind: "browser"; threadRef: ScopedThreadRef; snapshot: PreviewSessionSnapshot };
+  | {
+      kind: "browser";
+      threadRef: ScopedThreadRef;
+      snapshot: PreviewSessionSnapshot;
+      placement?: SurfacePlacement;
+    };
 
 export type ClosedViewEntry = ClosedView & { id: string };
 
@@ -56,6 +66,8 @@ const isAttachment = Schema.is(ChatFileAttachment);
 const isClosedViewEntry = (entry: unknown): entry is ClosedViewEntry => {
   const view = entry as ClosedViewEntry | null;
   if (!view || typeof view.id !== "string" || !isThreadRef(view.threadRef)) return false;
+  if (view.placement !== undefined && view.placement !== "main" && view.placement !== "sidebar")
+    return false;
   if (view.kind === "browser") return isSnapshot(view.snapshot);
   if (view.kind !== "panel-tab") return false;
   const surface = view.surface;

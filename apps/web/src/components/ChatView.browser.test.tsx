@@ -1,3 +1,4 @@
+import { installChatRouteCommands } from "../shortcuts/chatRouteCommands";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -33,7 +34,12 @@ import stylesheet from "~/index.css?inline";
 import { environmentContextRecord } from "~/lib/composerContextRecords";
 import { startWorkspaceFocus } from "~/lib/workspaceFocus";
 import { usePromptStashStore } from "~/promptStashStore";
-import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
+import {
+  selectThreadRightPanelState,
+  useRightPanelStore,
+  withSurfacePlacement,
+} from "~/rightPanelStore";
+import { selectThreadTerminalUiState, useTerminalUiStateStore } from "~/terminalUiStateStore";
 import { getRouter } from "~/router";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { environmentThreadDetails } from "~/state/threads";
@@ -44,6 +50,8 @@ import {
   answerRpc,
   assistantItem,
   dispatchedCommands,
+  emitShellSnapshot,
+  emitTerminalMetadata,
   emitThreadEvent,
   hasPendingAssetUrl,
   installFakeEnvironment,
@@ -919,28 +927,29 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
     router: false,
   });
   const composer = page.getByTestId("composer-editor");
-  const closePanel = page.getByRole("button", { name: "Close panel", exact: true });
-  await expect.element(closePanel).not.toBeInTheDocument();
-  await page.getByRole("button", { name: "Open a surface", exact: true }).click();
+  const panelToggle = page.getByRole("button", { name: "Toggle right panel", exact: true });
+  await panelToggle.click();
   await page.getByRole("button", { name: /^Files/ }).click();
-  await expect.element(closePanel).toBeVisible();
+  await expect.element(panelToggle).toHaveAttribute("aria-pressed", "true");
   await composer.click();
   await userEvent.keyboard("{Control>}t{/Control}");
-  await expect.element(page.getByRole("menuitem", { name: /Files/ })).toBeVisible();
+  await expect
+    .element(page.getByRole("dialog").getByRole("button", { name: /^Files/ }))
+    .toBeVisible();
 });
 
-it("the Tabs layout opens surfaces as full-width tabs beside a pinned thread tab", async () => {
+it("keeps full-width and sidebar surfaces independent of the thread and each other", async () => {
   await page.viewport(1280, 800);
   const thread = threadWithHistory("thread-surface-tabs", 1);
   using _environment = installFakeEnvironment([thread]);
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
-    surfaceLayout: "tabs",
   });
   const router = getRouter(
     createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
   );
+  using _routeCommands = { [Symbol.dispose]: installChatRouteCommands(router) };
   await router.load();
   await using _app = await render(<AppRoot router={router} />, {
     // AppRoot brings its own router.
@@ -948,16 +957,17 @@ it("the Tabs layout opens surfaces as full-width tabs beside a pinned thread tab
   });
   const threadRef = scopeThreadRef(ENVIRONMENT_ID, thread.id);
   const composer = page.getByTestId("composer-editor");
-  const threadTab = page.getByRole("button", { name: "Thread, pinned", exact: true });
+  const threadTab = page.getByRole("button", { name: thread.title, exact: true });
   const filesTab = page.getByRole("button", { name: "Files", exact: true });
   const openFilesFromLauncher = async () => {
     await page.getByRole("button", { name: "Open a surface", exact: true }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /^Files/ })
-      .click();
+    const launcher = page.getByRole("dialog");
+    await expect.element(launcher.getByRole("heading")).not.toBeInTheDocument();
+    await launcher.getByRole("button", { name: /^Files/ }).click();
+    await expect.element(launcher).not.toBeInTheDocument();
   };
   await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  expect(threadTab.element().closest("[data-chat-header]")).not.toBeNull();
   await composer.click();
   await userEvent.keyboard("Keep this draft");
 
@@ -965,10 +975,8 @@ it("the Tabs layout opens surfaces as full-width tabs beside a pinned thread tab
   await expect.element(filesTab).toBeVisible();
   await expect.element(threadTab).not.toHaveAttribute("aria-current");
   await expect.element(composer).not.toBeVisible();
-  // The sidebar panel's own close control does not appear in Tabs.
-  await expect
-    .element(page.getByRole("button", { name: "Close panel", exact: true }))
-    .not.toBeInTheDocument();
+  const panelToggle = page.getByRole("button", { name: "Toggle right panel", exact: true });
+  await expect.element(panelToggle).toHaveAttribute("aria-pressed", "false");
 
   await threadTab.click();
   await expect.element(composer).toBeVisible();
@@ -981,18 +989,95 @@ it("the Tabs layout opens surfaces as full-width tabs beside a pinned thread tab
     selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef).surfaces;
   expect(surfaces().filter((surface) => surface.kind === "files")).toHaveLength(1);
 
-  // The right panel shortcut switches between the thread and its last tab.
-  await userEvent.keyboard("{Control>}{Alt>}b{/Alt}{/Control}");
-  await expect.element(composer).toBeVisible();
-  await userEvent.keyboard("{Control>}{Alt>}b{/Alt}{/Control}");
+  // The sidebar opens independently of the selected full-width tab.
+  await panelToggle.click();
+  await page.getByRole("button", { name: /^Diff/ }).click();
+  await expect.element(filesTab).toBeVisible();
   await expect.element(composer).not.toBeVisible();
+  await userEvent.keyboard("{Control>}1{/Control}");
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await expect.element(panelToggle).toHaveAttribute("aria-pressed", "true");
+  await composer.click();
+  await userEvent.keyboard("{Control>}2{/Control}");
+  await expect.element(filesTab).toHaveAttribute("aria-current", "page");
+  await userEvent.keyboard("{Control>}{Tab}{/Control}");
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await userEvent.keyboard("{Control>}{Shift>}{Tab}{/Shift}{/Control}");
+  await expect.element(filesTab).toHaveAttribute("aria-current", "page");
+  await filesTab.click();
+  await userEvent.keyboard("{Control>}t{/Control}");
+  await expect.element(page.getByRole("dialog")).toBeVisible();
+  expect(
+    document.querySelector(
+      '[data-chat-header] button[aria-label="Open a surface"][aria-expanded="true"]',
+    ),
+  ).not.toBeNull();
+  await userEvent.keyboard("{Escape}");
+  await filesTab.click();
+  await userEvent.keyboard("{Control>}w{/Control}");
+  await expect.element(panelToggle).toHaveAttribute("aria-pressed", "true");
 
-  // Closing the active tab returns to the thread when no other tab is left.
-  await page.getByRole("button", { name: "Close Files", exact: true }).click();
+  // Closing the active tab returns to the thread when no other main tab is left.
   await expect.element(filesTab).not.toBeInTheDocument();
   await expect.element(threadTab).toHaveAttribute("aria-current", "page");
   await expect.element(composer).toHaveTextContent("Keep this draft");
-  expect(surfaces()).toEqual([]);
+  expect(surfaces().map((surface) => surface.kind)).toEqual(["diff"]);
+
+  await userEvent.dblClick(threadTab);
+  const titleInput = page.getByRole("textbox", { name: "Thread title" });
+  await expect.element(titleInput).toHaveFocus();
+  await userEvent.keyboard("{Escape}");
+
+  // An open drawer behind a surface is revealed on the first Mod+J.
+  const terminalStore = useTerminalUiStateStore.getState();
+  const terminalToggle = page.getByRole("button", { name: "Toggle terminal drawer" });
+  await act(async () => {
+    await emitShellSnapshot();
+    await emitTerminalMetadata({
+      type: "upsert",
+      terminal: {
+        threadId: thread.id,
+        terminalId: "review-drawer",
+        cwd: "/workspace",
+        worktreePath: null,
+        status: "running",
+        pid: 1,
+        exitCode: null,
+        exitSignal: null,
+        hasRunningSubprocess: false,
+        label: "Review drawer",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    terminalStore.ensureTerminal(threadRef, "review-drawer", { open: true, active: true });
+  });
+  await expect
+    .poll(() => Boolean(document.querySelector('[data-terminal-owner="drawer"]')))
+    .toBe(true);
+  withSurfacePlacement("main", () => useRightPanelStore.getState().open(threadRef, "files"));
+  await filesTab.click();
+  await expect.element(terminalToggle).toHaveAttribute("aria-pressed", "false");
+  await userEvent.keyboard("{Control>}j{/Control}");
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await expect
+    .poll(() => Boolean(document.activeElement?.closest('[data-terminal-owner="drawer"]')))
+    .toBe(true);
+  expect(
+    selectThreadTerminalUiState(
+      useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+      threadRef,
+    ).terminalOpen,
+  ).toBe(true);
+  await expect.element(terminalToggle).toHaveAttribute("aria-pressed", "true");
+  await filesTab.click();
+  await terminalToggle.click();
+  await expect.element(threadTab).toHaveAttribute("aria-current", "page");
+  await expect.element(terminalToggle).toHaveAttribute("aria-pressed", "true");
+  await terminalToggle.click();
+  await expect.element(terminalToggle).toHaveAttribute("aria-pressed", "false");
+  await composer.click();
+  await userEvent.keyboard("{Control>}l{/Control}");
+  await expect.poll(() => router.state.location.pathname).toBe("/pull-requests");
 });
 
 it("selecting a side-chat tab focuses that side chat's composer", async () => {

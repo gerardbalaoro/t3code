@@ -6,7 +6,7 @@ import {
   scopedThreadKey,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { TAB_NAVIGATION_COMMANDS, type ScopedThreadRef } from "@t3tools/contracts";
 import { linkOptions, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { useGT } from "gt-react";
 import { useEffect, useEffectEvent, useRef } from "react";
@@ -92,13 +92,23 @@ export function ReopenClosedViewShortcut() {
       : draft
         ? (draft.promotedTo ?? scopeThreadRef(draft.environmentId, draft.threadId))
         : null;
+  const hasThread = threadRef !== null;
   const terminalOpen = useTerminalUiStateStore(
     (state) =>
       selectThreadTerminalUiState(state.terminalUiStateByThreadKey, threadRef).terminalOpen,
   );
-  const previewOpen = useRightPanelStore(
-    (state) => selectActiveRightPanel(state.byThreadKey, threadRef) === "preview",
+  const rightPanelOpen = useRightPanelStore(
+    (state) => selectThreadRightPanelState(state.byThreadKey, threadRef).isOpen,
   );
+  const previewOpen = useRightPanelStore((state) => {
+    const panel = selectThreadRightPanelState(state.byThreadKey, threadRef);
+    return (
+      selectActiveRightPanel(state.byThreadKey, threadRef) === "preview" ||
+      panel.surfaces.some(
+        (surface) => surface.kind === "preview" && surface.id === panel.mainActiveSurfaceId,
+      )
+    );
+  });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const hasHistory = useClosedViewStore((state) => state.entries.length > 0);
   const openPreview = useAtomCommand(previewEnvironment.open);
@@ -234,6 +244,7 @@ export function ReopenClosedViewShortcut() {
           terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
+          rightPanelOpen,
           editableFocus: isEditableFocused(event.target),
           modelPickerOpen: isModelPickerOpen(),
         },
@@ -251,7 +262,7 @@ export function ReopenClosedViewShortcut() {
       window.removeEventListener("keydown", onKeyDown, true);
       unsubscribe?.();
     };
-  }, [keybindings, previewOpen, terminalOpen]);
+  }, [keybindings, previewOpen, rightPanelOpen, terminalOpen]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers forwarded shortcut chords with the desktop preview bridge and clears them on cleanup
   useEffect(() => {
@@ -261,7 +272,10 @@ export function ReopenClosedViewShortcut() {
       context: {
         previewFocus: true,
         previewOpen: true,
-        rightPanelOpen: true,
+        rightPanelOpen,
+        threadSurfaceTabs: hasThread,
+        surfaceTabNavigation: hasThread,
+        surfaceTabReturn: hasThread,
         terminalFocus: false,
         terminalOpen,
         editableFocus: false,
@@ -274,6 +288,7 @@ export function ReopenClosedViewShortcut() {
     const commands = [
       ...(hasHistory ? (["view.reopenClosed"] as const) : []),
       ...PREVIEW_FORWARDED_COMMANDS,
+      ...(hasThread ? TAB_NAVIGATION_COMMANDS : []),
     ];
     void preview
       .setForwardedShortcuts(
@@ -288,7 +303,7 @@ export function ReopenClosedViewShortcut() {
     return () => {
       void preview.setForwardedShortcuts([]).catch(() => undefined);
     };
-  }, [hasHistory, keybindings, terminalOpen]);
+  }, [hasHistory, keybindings, rightPanelOpen, terminalOpen, hasThread]);
 
   return null;
 }

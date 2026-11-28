@@ -12,7 +12,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { T, useGT, Var } from "gt-react";
-import { ChevronDownIcon } from "lucide-react";
+import { ArrowUpLeftIcon, ChevronDownIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -56,6 +56,7 @@ interface ChatHeaderProps {
   parentThreadLink: { threadId: ThreadId; title: string } | null;
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
+  pinnedTab?: { active: boolean; onSelect: () => void };
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
@@ -81,6 +82,7 @@ export const ChatHeader = memo(function ChatHeader({
   parentThreadLink,
   onOpenThread,
   rightPanelOpen,
+  pinnedTab,
   onNewThreadInProject,
   onOpenProjectSettings,
   onFindInThread,
@@ -250,6 +252,153 @@ export const ChatHeader = memo(function ChatHeader({
       setRenaming(null);
     }
   };
+  const renameInput =
+    renamingTitle === null ? null : (
+      <input
+        autoFocus
+        dir="auto"
+        aria-label={gt("Thread title")}
+        className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
+        defaultValue={renamingTitle}
+        onBlur={(event) => {
+          if (renameCommittedRef.current) return;
+          if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest("button")) {
+            setRenaming(null);
+            return;
+          }
+          commitRename(event.currentTarget.value);
+        }}
+        onFocus={(event) => event.currentTarget.select()}
+        onKeyDown={handleRenameKeyDown}
+      />
+    );
+
+  const linkOriginBadge =
+    renamingTitle === null && activeThreadLinkOrigin ? (
+      <Tooltip>
+        <TooltipTrigger render={<Badge variant="info" size="sm" />}>
+          <T>
+            From <Var>{activeThreadLinkOrigin}</Var>
+          </T>
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          <T>
+            Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked environment.
+          </T>
+        </TooltipPopup>
+      </Tooltip>
+    ) : null;
+  const guestShareIndicator = isServerThread ? (
+    <GuestShareIndicator threadRef={activeThreadRef} />
+  ) : null;
+
+  if (pinnedTab) {
+    const iconButtonClass =
+      "flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
+    return (
+      <>
+        <div
+          data-thread-tab
+          data-active-tab={pinnedTab.active}
+          onContextMenu={handleHeaderContextMenu}
+          className={cn(
+            "flex h-8 min-w-0 max-w-64 shrink-0 items-center gap-1 rounded-lg px-2 text-sm [-webkit-app-region:no-drag]",
+            pinnedTab.active
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          )}
+        >
+          {parentThreadLink ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("Open parent thread: {title}", {
+                      title: parentThreadLink.title,
+                    })}
+                    className={iconButtonClass}
+                    onClick={() => onOpenThread(parentThreadLink.threadId)}
+                  />
+                }
+              >
+                <ArrowUpLeftIcon aria-hidden className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup>{parentThreadLink.title}</TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {activeProject ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("New thread in {project}", { project: activeProjectName })}
+                    className={iconButtonClass}
+                    onClick={onNewThreadInProject}
+                  />
+                }
+              >
+                <ProjectFavicon project={activeProject} className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup>
+                <T>
+                  New thread in <Var>{activeProjectName}</Var>
+                </T>
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {renameInput ?? (
+            <h2 className="flex h-full min-w-0" dir={textDirection(activeThreadTitle)}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-current={pinnedTab.active ? "page" : undefined}
+                      className="flex h-full min-w-0 cursor-pointer items-center rounded-sm px-0.5 focus-visible:outline-2 focus-visible:outline-ring"
+                      onClick={(event) => {
+                        if (!isTrailingDoubleClick(event.detail)) pinnedTab.onSelect();
+                      }}
+                      onDoubleClick={
+                        canOperateThread && isServerThread ? handleTitleDoubleClick : undefined
+                      }
+                    />
+                  }
+                >
+                  <span className="truncate">{activeThreadTitle}</span>
+                </TooltipTrigger>
+                <TooltipPopup>{activeThreadTitle}</TooltipPopup>
+              </Tooltip>
+            </h2>
+          )}
+          {isServerThread && renamingTitle === null ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={gt("Thread actions for {title}", { title: activeThreadTitle })}
+                    aria-haspopup="menu"
+                    className={iconButtonClass}
+                    onClick={openMenuFromTitle}
+                  />
+                }
+              >
+                <ChevronDownIcon aria-hidden className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup>
+                {gt("Thread actions for {title}", { title: activeThreadTitle })}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+        </div>
+        {linkOriginBadge}
+        {guestShareIndicator}
+      </>
+    );
+  }
+
   return (
     <div
       ref={breadcrumbContainerRef}
@@ -335,26 +484,7 @@ export const ChatHeader = memo(function ChatHeader({
         ) : null}
         <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
           {renamingTitle !== null ? (
-            <input
-              autoFocus
-              dir="auto"
-              aria-label={gt("Thread title")}
-              className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
-              defaultValue={renamingTitle}
-              onBlur={(event) => {
-                if (renameCommittedRef.current) return;
-                if (
-                  event.relatedTarget instanceof HTMLElement &&
-                  event.relatedTarget.closest("button")
-                ) {
-                  setRenaming(null);
-                  return;
-                }
-                commitRename(event.currentTarget.value);
-              }}
-              onFocus={(event) => event.currentTarget.select()}
-              onKeyDown={handleRenameKeyDown}
-            />
+            renameInput
           ) : isServerThread ? (
             <Tooltip>
               <TooltipTrigger
@@ -396,24 +526,10 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
-          {renamingTitle === null && activeThreadLinkOrigin ? (
-            <Tooltip>
-              <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                <T>
-                  From <Var>{activeThreadLinkOrigin}</Var>
-                </T>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                <T>
-                  Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
-                  environment.
-                </T>
-              </TooltipPopup>
-            </Tooltip>
-          ) : null}
+          {linkOriginBadge}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
-      {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
+      {guestShareIndicator}
     </div>
   );
 });

@@ -21,6 +21,11 @@ import {
   useActivePreviewSessions,
 } from "~/previewStateStore";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import {
+  selectThreadRightPanelState,
+  surfacePlacementOf,
+  useRightPanelStore,
+} from "~/rightPanelStore";
 import { previewEnvironment } from "~/state/preview";
 import { readPreviewTunnelUrl } from "~/state/previewTunnel";
 import { useEnvironmentScope } from "~/state/session";
@@ -101,12 +106,18 @@ function openLinkInPreview({ tabId, url, background }: DesktopPreviewOpenLinkEve
     appAtomRegistry.get(primaryEnvironmentIdAtom),
   ).find((session) => session.runtimeTabId === tabId);
   if (!source) return;
+  const panel = selectThreadRightPanelState(
+    useRightPanelStore.getState().byThreadKey,
+    source.threadRef,
+  );
+  const placement = surfacePlacementOf(panel, `browser:${source.snapshot.tabId}`);
   void openUrlInPreview({
     threadRef: source.threadRef,
     url,
     openPreview: (input) => runAtomCommand(appAtomRegistry, previewEnvironment.open, input),
     profileId: source.snapshot.profileId,
     background,
+    placement,
   });
 }
 

@@ -31,21 +31,14 @@ applies to the web and desktop clients.
 
 ## Views
 
-On web and desktop, the grid button in a thread's header opens **Open a surface**, where you choose a
-view such as the browser, terminal, files, diff, pull request, linked items, a device, or a side
-chat. Press the letter shown beside a view to open it from the keyboard.
+On web and desktop, you can open views such as Files, Diff, Browser, and Terminal in two places.
 
-**Open views as** in **Settings → Appearance** sets where views open. **Sidebar**, the default,
-opens them in the right panel beside the thread. **Tabs** opens each one as a full-width tab in the
-thread, after a pinned **Thread** tab that always returns to the conversation. Your draft and
-scroll position stay as you left them, and the agent and terminals keep running. Each thread has its
-own tabs. Opening a view that is already open selects its tab; files opened from **Files** each get
-their own tab.
+- For a full-width tab, click **+** next to the thread title. Select a view from the menu.
+- To see a view beside the thread, click the right sidebar button. If the sidebar is empty, select
+  a view from the list. To add another view, click **+** in the sidebar.
 
-With Tabs, the terminal shortcut opens a terminal tab instead of the terminal drawer, and the
-right panel shortcut switches between the thread and its last tab. **Open pull requests and changes
-panels proactively** has no effect with Tabs, so a finished turn does not switch you away from the
-thread.
+Click the thread title to return to the conversation. The thread keeps its draft and scroll
+position when you switch tabs. To close a view, hover over its tab and click **×**.
 
 ## Math
 

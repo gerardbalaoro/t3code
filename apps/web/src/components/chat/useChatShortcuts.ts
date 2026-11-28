@@ -1,4 +1,8 @@
-import type { KeybindingCommand, ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import {
+  TAB_NAVIGATION_COMMANDS,
+  type KeybindingCommand,
+  type ResolvedKeybindingsConfig,
+} from "@t3tools/contracts";
 import { useEffect, useEffectEvent } from "react";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { resolveChatShortcutCommand, type ShortcutMatchContext } from "../../keybindings";
@@ -24,6 +28,7 @@ export type ChatShortcutCommands = Partial<Record<KeybindingCommand, ChatShortcu
 
 /** Window-level commands the main chat still runs while focus is in its side chat pane. */
 const SIDE_CHAT_PANE_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
+  ...TAB_NAVIGATION_COMMANDS,
   "rightPanel.toggle",
   "rightPanel.close",
   "rightPanel.toggleMaximized",
