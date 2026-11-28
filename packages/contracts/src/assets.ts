@@ -6,7 +6,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
 } from "./chatAttachment.ts";
-import { ProjectFaviconPath } from "./project.ts";
+import { ProjectFaviconPath, ProjectLucideIcon } from "./project.ts";
 import { ToolActivityNativeAppReference } from "./providerRuntime.ts";
 import { EnvironmentThemeId } from "./server.ts";
 
@@ -61,6 +61,7 @@ export const AssetResource = Schema.Union([
     // Cache-key hint only; the project projection supplies the authoritative path.
     path: Schema.optional(ProjectFaviconPath),
   }),
+  Schema.TaggedStruct("project-lucide-icon", { icon: ProjectLucideIcon }),
   Schema.TaggedStruct("native-app-icon", {
     app: NativeAppIconReference,
   }),

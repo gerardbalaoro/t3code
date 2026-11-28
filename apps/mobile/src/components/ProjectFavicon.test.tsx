@@ -21,10 +21,15 @@ vi.mock("../features/settings/appearance/AppearancePreferencesProvider", () => (
 vi.mock("../state/assets", async () => {
   const { Atom } = await import("effect/reactivity");
   const url = Atom.make<string | null>("https://example.test/favicon.png");
+  const svg = Atom.make<string | null>("data:image/svg+xml;base64,PHN2Zy8+");
   const missing = Atom.make<string | null>(null);
   return {
-    projectFaviconUrlAtom: (target: { readonly cwd: string }) =>
-      target.cwd === "/repo-without-icon" ? missing : url,
+    projectFaviconUrlAtom: (target: { readonly cwd: string; icon?: { name: string } }) => {
+      if (target.icon) {
+        return target.icon.name === "rocket" ? svg : missing;
+      }
+      return target.cwd === "/repo-without-icon" ? missing : url;
+    },
   };
 });
 
@@ -82,6 +87,34 @@ it("shows the next project's icon when a group's own project has none", async ()
     expect(container.querySelector("img")?.getAttribute("src")).toBe(
       "https://example.test/favicon.png",
     );
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+it("renders a downloaded Lucide icon and keeps a colored monogram when it is unavailable", async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const environmentId = EnvironmentId.make("env-1");
+  const renderIcon = (name: string) =>
+    act(async () =>
+      root.render(
+        <ProjectFavicon
+          environmentId={environmentId}
+          projectTitle="Sample Project"
+          workspaceRoot="/repo"
+          projectIcon={{ kind: "lucide", name, color: "purple" }}
+        />,
+      ),
+    );
+  try {
+    await renderIcon("rocket");
+    expect(container.querySelector("img")).not.toBeNull();
+    expect(container.textContent).toBe("");
+    await renderIcon("unknown-icon");
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toBe("SP");
   } finally {
     await act(async () => root.unmount());
   }

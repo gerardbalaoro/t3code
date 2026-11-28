@@ -5,6 +5,7 @@ import {
   AssetResource,
   EnvironmentId,
   type ProjectCloneSnapshot,
+  ProjectLucideIcon,
   WS_METHODS,
 } from "@t3tools/contracts";
 import { mediaMimeTypeFromExtension } from "@t3tools/shared/mediaPreview";
@@ -345,29 +346,37 @@ export function createProjectFaviconUrlAtomFamily(input: {
   ) => Atom.Atom<ReadonlyArray<ProjectCloneSnapshot>>;
 }) {
   const decodeKey = Schema.decodeUnknownSync(
-    Schema.Tuple([EnvironmentId, Schema.String, Schema.NullOr(Schema.String)]),
+    Schema.Tuple([
+      EnvironmentId,
+      Schema.String,
+      Schema.NullOr(Schema.String),
+      Schema.optional(ProjectLucideIcon),
+    ]),
   );
   const projectClones = input.projectClones;
   const family = Atom.family((key: string) => {
-    const [environmentId, cwd, path] = decodeKey(JSON.parse(key));
+    const [environmentId, cwd, path, icon] = decodeKey(JSON.parse(key));
     const query = input.createUrl({
       environmentId,
-      input: { resource: projectFaviconResource(cwd, path) },
+      input: {
+        resource: icon ? { _tag: "project-lucide-icon", icon } : projectFaviconResource(cwd, path),
+      },
     });
     // A cloned project exists before its files do, and the server reports its
     // icon missing until the clone lands. Ask again whenever the clone's phase
     // changes: the first list a client sees may already say done.
-    const request = projectClones
-      ? query.pipe(
-          Atom.makeRefreshOnSignal(
-            Atom.make(
-              (get) =>
-                get(projectClones(environmentId)).find((clone) => clone.destinationPath === cwd)
-                  ?.phase ?? null,
+    const request =
+      projectClones && !icon
+        ? query.pipe(
+            Atom.makeRefreshOnSignal(
+              Atom.make(
+                (get) =>
+                  get(projectClones(environmentId)).find((clone) => clone.destinationPath === cwd)
+                    ?.phase ?? null,
+              ),
             ),
-          ),
-        )
-      : query;
+          )
+        : query;
     const resolvedUrl = Atom.make((get): string | null => {
       const result = get(request);
       const connection = get(input.preparedConnection(environmentId));
@@ -380,7 +389,7 @@ export function createProjectFaviconUrlAtomFamily(input: {
     const cache = input.imageCache;
     if (!cache) return resolvedUrl;
 
-    const target = { environmentId, cwd, faviconPath: path };
+    const target = { environmentId, cwd, faviconPath: path, icon };
     const image = Atom.make((get) => {
       get(request);
       const url = get(resolvedUrl);
@@ -394,5 +403,12 @@ export function createProjectFaviconUrlAtomFamily(input: {
     }).pipe(Atom.setIdleTTL(ASSET_URL_IDLE_TTL_MS));
   });
   return (target: ProjectFaviconTarget) =>
-    family(getProjectFaviconResourceKey(target.environmentId, target.cwd, target.faviconPath));
+    family(
+      getProjectFaviconResourceKey(
+        target.environmentId,
+        target.cwd,
+        target.faviconPath,
+        target.icon,
+      ),
+    );
 }
