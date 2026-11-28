@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectLucideIcon } from "@t3tools/contracts";
 import { mediaMimeType } from "@t3tools/shared/mediaPreview";
 import {
   getProjectFaviconCacheKey,
@@ -19,6 +19,7 @@ export interface ProjectFaviconTarget {
   readonly environmentId: EnvironmentId;
   readonly cwd: string;
   readonly faviconPath?: string | null | undefined;
+  readonly icon?: ProjectLucideIcon | undefined;
 }
 
 const ImageDataUrl = Schema.String.check(
@@ -31,6 +32,7 @@ const Entry = Schema.Struct({
   environmentId: EnvironmentId,
   cwd: Schema.String,
   faviconPath: Schema.NullOr(Schema.String),
+  icon: Schema.optional(ProjectLucideIcon),
   revision: Schema.String,
   dataUrl: ImageDataUrl,
 });
@@ -39,7 +41,12 @@ const decodeEntry = Schema.decodeUnknownOption(Entry);
 const isImageDataUrl = Schema.is(ImageDataUrl);
 
 function keyFor(target: ProjectFaviconTarget) {
-  return getProjectFaviconResourceKey(target.environmentId, target.cwd, target.faviconPath);
+  return getProjectFaviconResourceKey(
+    target.environmentId,
+    target.cwd,
+    target.faviconPath,
+    target.icon,
+  );
 }
 
 export interface ProjectFaviconStorage {
@@ -205,6 +212,7 @@ export function createProjectFaviconCache(input: {
           environmentId: target.environmentId,
           cwd: target.cwd,
           faviconPath: target.faviconPath || null,
+          ...(target.icon ? { icon: target.icon } : {}),
           revision,
           dataUrl,
         };

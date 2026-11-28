@@ -691,6 +691,10 @@
       "types": "./src/threadFindBlockTags.ts",
       "import": "./src/threadFindBlockTags.ts"
     },
+    "./lucideIconByName": {
+      "types": "./src/lucideIconByName.ts",
+      "import": "./src/lucideIconByName.ts"
+    },
     "./assistantInsights": {
       "types": "./src/assistantInsights.ts",
       "import": "./src/assistantInsights.ts"
@@ -709,6 +713,7 @@
     "get-east-asian-width": "^1.6.0",
     "gt-i18n": "1.0.40",
     "hast-util-sanitize": "^5.0.2",
+    "lucide-react": "catalog:",
     "mdast-util-directive": "catalog:",
     "mdast-util-to-hast": "^13.2.1",
     "micromark-extension-directive": "catalog:",

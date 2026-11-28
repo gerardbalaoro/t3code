@@ -44,15 +44,16 @@ export const ProjectFavicon = memo(function ProjectFavicon(props: {
   readonly projectIcon?: ProjectIconOverride | null;
 }) {
   const size = props.size ?? 42;
-  const symbol = resolveProjectIconSymbol(props.projectIcon);
+  const icon = props.projectIcon?.kind === "lucide" ? props.projectIcon : undefined;
   const glyph = resolveProjectIconGlyph(props.projectIcon, props.projectTitle);
   const faviconUrl = useAtomValue(
-    props.workspaceRoot == null || glyph !== null
+    props.workspaceRoot == null || (glyph !== null && icon === undefined)
       ? EMPTY_FAVICON_URL
       : projectFaviconUrlAtom({
           environmentId: props.environmentId,
           cwd: props.workspaceRoot,
           faviconPath: props.faviconPath,
+          icon,
         }),
   );
   const renderableFaviconUrl = isProjectFaviconFallbackUrl(faviconUrl) ? null : faviconUrl;
@@ -60,22 +61,16 @@ export const ProjectFavicon = memo(function ProjectFavicon(props: {
   const cacheKey =
     renderableFaviconUrl && props.workspaceRoot
       ? renderableFaviconUrl.startsWith("data:")
-        ? getProjectFaviconResourceKey(props.environmentId, props.workspaceRoot, props.faviconPath)
+        ? getProjectFaviconResourceKey(
+            props.environmentId,
+            props.workspaceRoot,
+            props.faviconPath,
+            icon,
+          )
         : getProjectFaviconCacheKey(props.environmentId, props.workspaceRoot, renderableFaviconUrl)
       : null;
 
-  if (symbol !== null) {
-    return (
-      <SymbolView
-        name={symbol.name}
-        size={size}
-        tintColorClassName={projectIconColorClassNames(symbol.color).tint}
-        type="monochrome"
-      />
-    );
-  }
-
-  if (glyph !== null) {
+  if (glyph !== null && icon === undefined) {
     return <ProjectIconGlyphView glyph={glyph} size={size} />;
   }
 
@@ -85,6 +80,8 @@ export const ProjectFavicon = memo(function ProjectFavicon(props: {
       cacheKey={cacheKey}
       faviconUrl={renderableFaviconUrl}
       open={props.open}
+      fallbackGlyph={glyph}
+      fallbackSymbol={resolveProjectIconSymbol(icon)}
       projectTitle={props.projectTitle}
       size={size}
     />
@@ -142,6 +139,8 @@ function ProjectIconGlyphView(props: { readonly glyph: ProjectIconGlyph; readonl
 }
 
 function ProjectFaviconImage(props: {
+  readonly fallbackGlyph: ProjectIconGlyph | null;
+  readonly fallbackSymbol: ReturnType<typeof resolveProjectIconSymbol>;
   readonly cacheKey: string | null;
   readonly faviconUrl: string | null;
   readonly open?: boolean;
@@ -175,7 +174,7 @@ function ProjectFaviconImage(props: {
   );
 
   const showImage = faviconRequest !== null && status === "loaded";
-  const fallbackGlyph = showImage ? null : projectAutoMonogram(props.projectTitle);
+  const fallbackGlyph = props.fallbackGlyph ?? projectAutoMonogram(props.projectTitle);
 
   return (
     <View
@@ -186,7 +185,14 @@ function ProjectFaviconImage(props: {
         justifyContent: "center",
       }}
     >
-      {showImage ? null : fallbackGlyph ? (
+      {showImage ? null : props.fallbackSymbol ? (
+        <SymbolView
+          name={props.fallbackSymbol.name}
+          size={props.size}
+          tintColorClassName={projectIconColorClassNames(props.fallbackSymbol.color).tint}
+          type="monochrome"
+        />
+      ) : fallbackGlyph ? (
         <ProjectIconGlyphView glyph={fallbackGlyph} size={props.size} />
       ) : (
         <SymbolView

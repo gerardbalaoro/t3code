@@ -19,7 +19,12 @@ vi.mock("../features/settings/appearance/AppearancePreferencesProvider", () => (
 vi.mock("../state/assets", async () => {
   const { Atom } = await import("effect/reactivity");
   const url = Atom.make<string | null>("https://example.test/favicon.png");
-  return { projectFaviconUrlAtom: () => url };
+  const svg = Atom.make<string | null>("data:image/svg+xml;base64,PHN2Zy8+");
+  const missing = Atom.make<string | null>(null);
+  return {
+    projectFaviconUrlAtom: ({ icon }: { icon?: { name: string } }) =>
+      icon?.name === "rocket" ? svg : icon ? missing : url,
+  };
 });
 
 import { EnvironmentId } from "@t3tools/contracts";
@@ -45,6 +50,34 @@ it("mounts the favicon image in the first commit", async () => {
     );
     expect(container.querySelector("img")).not.toBeNull();
     expect(commits).toEqual(["mount"]);
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+it("renders a downloaded Lucide icon and keeps a colored monogram when it is unavailable", async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const environmentId = EnvironmentId.make("env-1");
+  const renderIcon = (name: string) =>
+    act(async () =>
+      root.render(
+        <ProjectFavicon
+          environmentId={environmentId}
+          projectTitle="Sample Project"
+          workspaceRoot="/repo"
+          projectIcon={{ kind: "lucide", name, color: "purple" }}
+        />,
+      ),
+    );
+  try {
+    await renderIcon("rocket");
+    expect(container.querySelector("img")).not.toBeNull();
+    expect(container.textContent).toBe("");
+    await renderIcon("unknown-icon");
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toBe("SP");
   } finally {
     await act(async () => root.unmount());
   }

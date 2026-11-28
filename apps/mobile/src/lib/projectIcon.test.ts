@@ -29,13 +29,19 @@ describe("resolveProjectChipIcon", () => {
     expect(
       resolveProjectChipIcon(project("t3code", { kind: "emoji", emoji: "🚀" }), null, favicon),
     ).toEqual({ kind: "emoji", emoji: "🚀" });
-    expect(
-      resolveProjectChipIcon(
-        project("lucide proj", { kind: "lucide", name: "rocket", color: "emerald" }),
-        null,
-        favicon,
-      ),
-    ).toEqual({ kind: "monogram", text: "LP", color: "emerald" });
+  });
+
+  it("uses a rendered Lucide icon before falling back to a colored monogram", () => {
+    const lucide = project("lucide proj", { kind: "lucide", name: "rocket", color: "emerald" });
+    expect(resolveProjectChipIcon(lucide, null, favicon)).toEqual({
+      kind: "favicon",
+      uri: "https://env.example/favicon.png",
+    });
+    expect(resolveProjectChipIcon(lucide, null, noFavicon)).toEqual({
+      kind: "monogram",
+      text: "LP",
+      color: "emerald",
+    });
   });
 
   it("uses the favicon, then a monogram of the title", () => {

@@ -26,11 +26,13 @@ import {
   type ThreadLink,
 } from "@t3tools/shared/threadLinks";
 import { relabelThreadLinks } from "@t3tools/shared/threadLinksCopy";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { msg, useGT, useMessages } from "gt-react-native";
 
 import { threadChipTargets } from "../lib/enrichedLinkPresentation";
+import { downscaleProjectFavicon } from "../lib/projectFaviconDatabaseCache";
 import { resolveProjectChipIcon } from "../lib/projectIcon";
 import { projectGlyphImageAtom, projectGlyphKey } from "../native/ProjectChipIconImages";
 import { projectFaviconUrlAtom } from "./assets";
@@ -105,6 +107,12 @@ const decodeThreadChipTargets = Schema.decodeUnknownSync(
   ),
 );
 
+const lucideChipImageAtom = Atom.family((url: string) =>
+  Atom.make(
+    Effect.promise((signal) => downscaleProjectFavicon({ url }, signal).catch(() => null)),
+  ).pipe(Atom.setIdleTTL(60 * 60_000)),
+);
+
 const threadProjectChipIconAtom = Atom.family((key: string) => {
   const ref = scopeThreadRef(...decodeThreadKey(JSON.parse(key)));
   return Atom.make((get): string | null => {
@@ -131,16 +139,23 @@ const threadProjectChipIconAtom = Atom.family((key: string) => {
     const icon = resolveProjectChipIcon(
       project,
       get(serverEnvironment.configValueAtom(ref.environmentId))?.scratchWorkspaceRoot,
-      () =>
-        project
-          ? get(
-              projectFaviconUrlAtom({
-                environmentId: ref.environmentId,
-                cwd: project.workspaceRoot,
-                faviconPath: project.faviconPath,
-              }),
-            )
-          : null,
+      () => {
+        if (!project) return null;
+        const lucide = project.projectIcon?.kind === "lucide" ? project.projectIcon : undefined;
+        const url = get(
+          projectFaviconUrlAtom({
+            environmentId: ref.environmentId,
+            cwd: project.workspaceRoot,
+            faviconPath: project.faviconPath,
+            icon: lucide,
+          }),
+        );
+        if (!lucide) return url;
+        // Native thread-link chips decode bitmaps; the regular project icon view can use the SVG.
+        return url?.startsWith("data:image/svg+xml;base64,")
+          ? AsyncResult.getOrElse(get(lucideChipImageAtom(url)), () => null)
+          : null;
+      },
     );
     if (!icon) return null;
     if (icon.kind === "favicon") return icon.uri;
