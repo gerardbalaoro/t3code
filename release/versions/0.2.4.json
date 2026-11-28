@@ -1,0 +1,34 @@
+{
+  "version": "0.2.4",
+  "previousVersion": "0.2.3",
+  "upstream": {
+    "tag": "v0.1.14-nightly.20261128.5385",
+    "commit": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8"
+  },
+  "source": {
+    "upstream": {
+      "tag": "v0.1.14-nightly.20261128.5385",
+      "commit": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8"
+    },
+    "patches": [
+      {
+        "branch": "feature/create-files-nightly",
+        "base": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8",
+        "commit": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861"
+      },
+      {
+        "branch": "feat/mobile-lucide-icons",
+        "parent": "feature/create-files-nightly",
+        "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+        "commit": "dfb1a15fc7f9664760c7ed80d80edeee666eaf18"
+      },
+      {
+        "branch": "dev/patch",
+        "parent": "feature/create-files-nightly",
+        "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+        "commit": "99bdc466b10fd21bf19f96fcd3f86d92f9e0402c"
+      }
+    ]
+  },
+  "notesSha256": "61ac9f21a911ca946f7da8c952f3e2c70ab20be2e3fd0f02f6982dae2b006d19"
+}
