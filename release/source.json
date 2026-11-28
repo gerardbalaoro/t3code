@@ -10,6 +10,12 @@
       "commit": "15e366abe65b42817442fdaf675adf0d2245d592"
     },
     {
+      "branch": "feat/mobile-lucide-icons",
+      "parent": "feature/create-files-nightly",
+      "base": "15e366abe65b42817442fdaf675adf0d2245d592",
+      "commit": "d6b7bd4e481e7ce4ecd8daf26a31fd04379f20b5"
+    },
+    {
       "branch": "dev/patch",
       "parent": "feature/create-files-nightly",
       "base": "15e366abe65b42817442fdaf675adf0d2245d592",
