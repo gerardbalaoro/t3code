@@ -1,0 +1,40 @@
+{
+  "version": "0.2.5",
+  "previousVersion": "0.2.4",
+  "upstream": {
+    "tag": "v0.1.14-nightly.20261128.5385",
+    "commit": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8"
+  },
+  "source": {
+    "upstream": {
+      "tag": "v0.1.14-nightly.20261128.5385",
+      "commit": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8"
+    },
+    "patches": [
+      {
+        "branch": "feature/create-files-nightly",
+        "base": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8",
+        "commit": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861"
+      },
+      {
+        "branch": "feat/mobile-lucide-icons",
+        "parent": "feature/create-files-nightly",
+        "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+        "commit": "dfb1a15fc7f9664760c7ed80d80edeee666eaf18"
+      },
+      {
+        "branch": "feat/workspace-tabs-release",
+        "parent": "feature/create-files-nightly",
+        "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+        "commit": "99eb62e2f5b4bc74dd82d2c97ae238c9ec6d382e"
+      },
+      {
+        "branch": "dev/patch",
+        "parent": "feature/create-files-nightly",
+        "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+        "commit": "99bdc466b10fd21bf19f96fcd3f86d92f9e0402c"
+      }
+    ]
+  },
+  "notesSha256": "44e6a735e66a3e762c077fe0e209f183d3b3cf054592c5580806bccec8ac09dd"
+}
