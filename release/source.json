@@ -1,25 +1,25 @@
 {
   "upstream": {
-    "tag": "v0.1.14-nightly.20261128.5372",
-    "commit": "9ceb8bfbecd06769db19eff0dd852d7d23226a0b"
+    "tag": "v0.1.14-nightly.20261128.5385",
+    "commit": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8"
   },
   "patches": [
     {
       "branch": "feature/create-files-nightly",
-      "base": "9ceb8bfbecd06769db19eff0dd852d7d23226a0b",
-      "commit": "15e366abe65b42817442fdaf675adf0d2245d592"
+      "base": "0eeb7d10c8f36a2d36e09adf14b409908f9f76a8",
+      "commit": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861"
     },
     {
       "branch": "feat/mobile-lucide-icons",
       "parent": "feature/create-files-nightly",
-      "base": "15e366abe65b42817442fdaf675adf0d2245d592",
-      "commit": "d6b7bd4e481e7ce4ecd8daf26a31fd04379f20b5"
+      "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+      "commit": "dfb1a15fc7f9664760c7ed80d80edeee666eaf18"
     },
     {
       "branch": "dev/patch",
       "parent": "feature/create-files-nightly",
-      "base": "15e366abe65b42817442fdaf675adf0d2245d592",
-      "commit": "7c916475e14f7fd2d9e3545715cc52bde02f36a4"
+      "base": "615e2f7c9f140079b81c1a2caa3c0cc9040b4861",
+      "commit": "99bdc466b10fd21bf19f96fcd3f86d92f9e0402c"
     }
   ]
 }
