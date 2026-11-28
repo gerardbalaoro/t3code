@@ -5,6 +5,7 @@
 | Branch | Purpose |
 | --- | --- |
 | `main` | Holds the approved source manifest, release notes, and workflows. |
+| `upstream/main` | Mirrors the official T3 Code commit pinned in the source manifest. |
 | `feature/*` | Holds application features. A feature can build on another feature. |
 | `dev/patch` | Holds distribution changes and the G Code build workflow. |
 | `dev/main` | Holds the assembled app source, build workflow, and release notes for the current build. |
@@ -13,6 +14,9 @@
 | `gcode/inputs/*` | Retains pinned patch revisions for release assembly. |
 
 Use an application worktree for feature and distribution development.
+
+Sync `upstream/main` directly to the official commit used for the current rebase.
+Never target `upstream/main` with a pull request.
 
 ## Propose a Change
 
