@@ -29,6 +29,17 @@ The controls retreat as the composer docks after you send the first message.
 Turn on **Composer context** to keep those controls visible after the thread starts. This preference
 applies to the web and desktop clients.
 
+## Views
+
+On web and desktop, you can open views such as Files, Diff, Browser, and Terminal in two places.
+
+- For a full-width tab, click **+** next to the thread title. Select a view from the menu.
+- To see a view beside the thread, click the right sidebar button. If the sidebar is empty, select
+  a view from the list. To add another view, click **+** in the sidebar.
+
+Click the thread title to return to the conversation. The thread keeps its draft and scroll
+position when you switch tabs. To close a view, hover over its tab and click **×**.
+
 ## Math
 
 Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown

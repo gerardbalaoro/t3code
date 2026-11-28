@@ -1,3 +1,4 @@
+import { surfaceTabShortcutContext } from "../lib/surfaceTabShortcuts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
@@ -54,7 +55,11 @@ import { isPreviewFocused } from "../lib/previewFocus";
 import { isModelPickerOpen, subscribeToModelPickerVisibility } from "../modelPickerVisibility";
 import { shortcutModifierStore } from "../shortcutModifierState";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
-import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectActiveRightPanel,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "../rightPanelStore";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -666,8 +671,17 @@ type ThreadStatusInput = Pick<
 };
 
 // Read at event time: subscribing Sidebar to terminal or modifier state re-renders every row.
-export function threadShortcutContext(routeThreadRef: ScopedThreadRef | null) {
+export function threadShortcutContext(
+  routeThreadRef: ScopedThreadRef | null,
+  target: EventTarget | null = document.activeElement,
+) {
   return {
+    ...(routeThreadRef
+      ? surfaceTabShortcutContext(
+          target,
+          selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, routeThreadRef),
+        )
+      : {}),
     terminalFocus: isTerminalFocused(),
     terminalOpen:
       routeThreadRef !== null &&
@@ -755,15 +769,13 @@ export function useThreadJumpHintsVisible(
   keybindings: ResolvedKeybindingsConfig,
   routeThreadRef: ScopedThreadRef | null,
 ): boolean {
-  return React.useSyncExternalStore(
-    subscribeToThreadJumpHintInputs,
-    () =>
-      threadJumpModifierHold.getSnapshot() &&
-      shouldShowThreadJumpHintsForModifiers(shortcutModifierStore.getSnapshot(), keybindings, {
-        platform: navigator.platform,
-        context: threadShortcutContext(routeThreadRef),
-      }),
-  );
+  return React.useSyncExternalStore(subscribeToThreadJumpHintInputs, () => {
+    if (!threadJumpModifierHold.getSnapshot()) return false;
+    return shouldShowThreadJumpHintsForModifiers(shortcutModifierStore.getSnapshot(), keybindings, {
+      platform: navigator.platform,
+      context: threadShortcutContext(routeThreadRef),
+    });
+  });
 }
 
 export function resolveThreadLastVisitedAt(

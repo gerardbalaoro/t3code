@@ -1,9 +1,13 @@
+import {
+  focusedSurfacePlacement as detectSurfacePlacement,
+  surfaceTabShortcutContext,
+} from "../lib/surfaceTabShortcuts";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { draftSupportedRuntimeModes } from "./chat/runtimeModeConfig";
-import { workspaceAreaProps } from "../lib/workspaceFocus";
+import { requestWorkspaceContentFocus, workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
@@ -73,6 +77,7 @@ import {
   AuthSourceControlWriteScope,
   AuthPreviewOperateScope,
   AuthTerminalOperateScope,
+  TAB_JUMP_KEYBINDING_COMMANDS,
   type AssistantCitation,
   type ResponseContextRecord,
   type ChatFileAttachment,
@@ -143,6 +148,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -187,6 +193,10 @@ import {
   selectActiveRightPanelSurface,
   selectThreadPanelOpen,
   selectThreadRightPanelState,
+  surfacesInPlacement,
+  withSurfacePlacement,
+  type RightPanelSurface,
+  type SurfacePlacement,
   useRightPanelStore,
 } from "../rightPanelStore";
 import { isPreviewSupportedInRuntime, useThreadPreviewState } from "../previewStateStore";
@@ -399,6 +409,9 @@ import { observeResize } from "~/lib/observeResize";
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
+import { type SurfaceLauncherActions, RightPanelTabs, surfaceTitle } from "./RightPanelTabs";
+import { getPreviewActionPlacement } from "./preview/previewActionBus";
+import { ThreadSurfaceTabPanel } from "./chat/ThreadSurfaceTabPanel";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
@@ -1160,6 +1173,11 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelState = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, activeThreadRef),
   );
+  const mainSurfaces = surfacesInPlacement(rightPanelState, "main");
+  const mainSurface = embedded
+    ? null
+    : (mainSurfaces.find((surface) => surface.id === rightPanelState.mainActiveSurfaceId) ?? null);
+  const surfaceTabActive = mainSurface !== null;
   const shouldUsePlanSidebarSheet = prefersPlanSidebarSheet && rightPanelState.maximized !== true;
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
@@ -1182,13 +1200,9 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelOpen = rightPanelState.isOpen;
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
-  const rightPanelPresenceValue = {
-    activeSurface: activeRightPanelSurface,
-    surfaces: rightPanelState.surfaces,
-  };
   const rightPanelPresence = usePanelPresence(
     rightPanelOpen && activeThreadRef !== null,
-    rightPanelPresenceValue,
+    rightPanelState,
     panelAnimationsActive,
     activeThreadKey,
     panelAnimationDurationMs,
@@ -1197,12 +1211,18 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelControlsInPanel =
     shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
   const rightPanelControlsAtRoot = rightPanelPresent && !shouldUsePlanSidebarSheet;
-  const renderedRightPanelSurface = rightPanelPresence.value?.activeSurface ?? null;
-  const renderedRightPanelSurfaces = rightPanelPresence.value?.surfaces ?? [];
-  const previewMiniPlayerVisible = shouldRenderPreviewMiniPlayer(
-    activePreviewMiniPlayer?.source ?? null,
-    renderedRightPanelSurface,
-  );
+  const retainedPanelState = rightPanelPresence.value;
+  const renderedRightPanelSurfaces = retainedPanelState
+    ? surfacesInPlacement(retainedPanelState, "sidebar")
+    : [];
+  const renderedRightPanelSurface =
+    renderedRightPanelSurfaces.find(
+      (surface) => surface.id === retainedPanelState?.activeSurfaceId,
+    ) ?? null;
+  const previewMiniPlayerSource = activePreviewMiniPlayer?.source ?? null;
+  const previewMiniPlayerVisible =
+    shouldRenderPreviewMiniPlayer(previewMiniPlayerSource, renderedRightPanelSurface) &&
+    shouldRenderPreviewMiniPlayer(previewMiniPlayerSource, mainSurface);
   const canMaximizeRightPanel = rightPanelOpen;
   // An embedded side chat has no panel; a stale maximized flag would hide its own column.
   const rightPanelMaximized =
@@ -1210,6 +1230,7 @@ export default function ChatView(props: ChatViewProps) {
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
   const [threadPanelPopoverHandle] = useState(PopoverCreateHandle);
   const [chatCanvasStore] = useState(createChatCanvasStore);
+  const [surfacePreviewOverlay, setSurfacePreviewOverlay] = useState<HTMLDivElement | null>(null);
 
   const latestRunSettled = isLatestRunSettled(activeLatestRun, activeRuntime);
   const activeThreadEnvironmentId = activeThread?.environmentId;
@@ -2044,6 +2065,15 @@ export default function ChatView(props: ChatViewProps) {
   const sendAppMessageStable = useStableCallback(sendAppMessage);
   const queuedRunsControlRef = useRef<QueuedRunsControlHandle>(null);
 
+  const revealThreadTab = useStableCallback(() => {
+    if (!activeThreadRef || !surfaceTabActive) return;
+    withSurfacePlacement("main", () => useRightPanelStore.getState().close(activeThreadRef));
+  });
+  const selectThreadTab = useStableCallback(() => {
+    if (!surfaceTabActive) return;
+    revealThreadTab();
+    requestWorkspaceContentFocus();
+  });
   const {
     activatePanelTerminalStable,
     addTerminalContextToDraftStable,
@@ -2065,6 +2095,11 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadRef,
     activeProject,
     activeRightPanelSurface,
+    mainSurface,
+    revealDrawer: () => {
+      // Remove the drawer's inert wrapper before a terminal action tries to focus it.
+      if (surfaceTabActive) flushSync(revealThreadTab);
+    },
     runningTerminalIds,
     activeServerOrderedTerminalIds,
     activeTerminalLabelsById,
@@ -2194,6 +2229,34 @@ export default function ChatView(props: ChatViewProps) {
     terminalLabelsById: activeTerminalLabelsById,
   });
   const closeRightPanelSurfaceStable = closeRightPanelSurface;
+  const focusedSurfacePlacement = useStableCallback(
+    (target: EventTarget | null, isDesktopMenu = false): SurfacePlacement | undefined =>
+      detectSurfacePlacement(target) ?? (isDesktopMenu ? getPreviewActionPlacement() : undefined),
+  );
+  const closeActiveRightPanelSurfaceStable = useStableCallback(
+    (
+      target: EventTarget | null = document.activeElement,
+      isDesktopMenu = false,
+      repeat = false,
+    ) => {
+      const placement = focusedSurfacePlacement(target, isDesktopMenu);
+      const surface =
+        placement === "sidebar"
+          ? activeRightPanelSurface
+          : (mainSurface ?? activeRightPanelSurface);
+      if (!surface) return false;
+      if (!repeat) closeRightPanelSurfaceStable(surface);
+      return true;
+    },
+  );
+  const handleMainNewSurfaceShortcut = useStableCallback(
+    (target: EventTarget | null, isDesktopMenu: boolean) =>
+      !rightPanelOpen || focusedSurfacePlacement(target, isDesktopMenu) === "main",
+  );
+  const handleSidebarNewSurfaceShortcut = useStableCallback(
+    (target: EventTarget | null, isDesktopMenu: boolean) =>
+      rightPanelOpen && focusedSurfacePlacement(target, isDesktopMenu) !== "main",
+  );
   const persistThreadSettingsForNextTurn = async (input: {
     threadId: ThreadId;
     createdAt: string;
@@ -2575,7 +2638,6 @@ export default function ChatView(props: ChatViewProps) {
     gitCwd,
     activeProjectCwd,
     onDiffPanelOpen,
-    closeRightPanelSurface,
   });
   const pullRequestSurfaceAvailable = supportsPullRequests && pullRequestPanelTarget !== null;
   const {
@@ -2893,29 +2955,70 @@ export default function ChatView(props: ChatViewProps) {
     setTerminalUiLaunchContext(null);
   }
 
-  const getShortcutContext = (eventTarget: EventTarget | null = document.activeElement) => ({
-    terminalFocus: getTerminalFocusOwner() !== null,
-    terminalOpen: Boolean(terminalUiState.terminalOpen),
-    previewFocus: isPreviewFocused(),
-    previewOpen: previewPanelOpen,
-    rightPanelOpen,
-    editableFocus: isEditableFocused(eventTarget),
-    modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
-    composerFocus:
-      document.activeElement?.getAttribute("data-testid") === "composer-editor" &&
-      isInSideChatPane(document.activeElement) === embedded,
-    draftThreadRoute: routeKind === "draft",
-    turnRunning: phase === "running" || phase === "connecting",
-    // A queued-message edit or a question's answer owns the composer even when its text is empty.
-    composerEmpty:
-      !queuedRunEdit.isEditing &&
-      pendingUserInputs.length === 0 &&
-      !composerHasNonPromptContent &&
-      promptRef.current.trim().length === 0,
-    composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, promptRef.current),
-    isWeb: !isElectron,
-    isDesktop: isElectron,
+  const tabNavigationPlacement = useStableCallback(
+    (target: EventTarget | null, desktopMenu = false): SurfacePlacement =>
+      rightPanelMaximized ? "sidebar" : (focusedSurfacePlacement(target, desktopMenu) ?? "main"),
+  );
+  const returnToThreadTab = useStableCallback(() => {
+    if (!activeThreadRef || embedded) return false;
+    if (rightPanelMaximized) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
+    revealThreadTab();
+    requestWorkspaceContentFocus();
+    return true;
   });
+  const navigateSurfaceTabs = useStableCallback(
+    (target: EventTarget | null, selection: number | "next" | "previous", desktopMenu = false) => {
+      if (!activeThreadRef || embedded) return false;
+      const placement = tabNavigationPlacement(target, desktopMenu);
+      const surfaces =
+        placement === "main" ? mainSurfaces : rightPanelOpen ? renderedRightPanelSurfaces : [];
+      if (surfaces.length === 0) return false;
+      if (typeof selection === "number") {
+        const surface = surfaces[selection];
+        if (surface) activateRightPanelSurfaceStable(surface);
+        return true;
+      }
+      // The thread occupies the first position in the main strip.
+      const active = placement === "main" ? mainSurface : activeRightPanelSurface;
+      const offset = placement === "main" ? 1 : 0;
+      const count = surfaces.length + offset;
+      const index = surfaces.findIndex((surface) => surface.id === active?.id) + offset;
+      const delta = selection === "next" ? 1 : -1;
+      const next = index < 0 ? (delta > 0 ? 0 : count - 1) : (index + delta + count) % count;
+      const surface = surfaces[next - offset];
+      if (surface) activateRightPanelSurfaceStable(surface);
+      else returnToThreadTab();
+      return true;
+    },
+  );
+  const getShortcutContext = (eventTarget: EventTarget | null = document.activeElement) => {
+    return {
+      ...(!embedded && activeThreadRef
+        ? surfaceTabShortcutContext(eventTarget, rightPanelState)
+        : {}),
+      terminalFocus: getTerminalFocusOwner() !== null,
+      terminalOpen: Boolean(terminalUiState.terminalOpen),
+      previewFocus: isPreviewFocused(),
+      previewOpen: previewPanelOpen,
+      rightPanelOpen,
+      editableFocus: isEditableFocused(eventTarget),
+      modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
+      composerFocus:
+        document.activeElement?.getAttribute("data-testid") === "composer-editor" &&
+        isInSideChatPane(document.activeElement) === embedded,
+      draftThreadRoute: routeKind === "draft",
+      turnRunning: phase === "running" || phase === "connecting",
+      // A queued-message edit or a question's answer owns the composer even when its text is empty.
+      composerEmpty:
+        !queuedRunEdit.isEditing &&
+        pendingUserInputs.length === 0 &&
+        !composerHasNonPromptContent &&
+        promptRef.current.trim().length === 0,
+      composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, promptRef.current),
+      isWeb: !isElectron,
+      isDesktop: isElectron,
+    };
+  };
   const getShortcutContextStable = useStableCallback(getShortcutContext);
   const timelineSkills = activeProviderStatus
     ? resolveProviderSkillsForCwd(activeProviderStatus, gitCwd)
@@ -2928,6 +3031,16 @@ export default function ChatView(props: ChatViewProps) {
     }
   });
 
+  const terminalSurfaceAvailable = activeProject !== null && canOperateTerminal;
+  // Tabs: thread details live in the thread tab, so showing them shows that tab.
+  const toggleThreadPanelInLayout = useStableCallback(() => {
+    if (surfaceTabActive && threadPanelPresentation === "inline") {
+      selectThreadTab();
+      if (!threadPanelOpen) toggleThreadPanelStable();
+      return;
+    }
+    toggleThreadPanelStable();
+  });
   useChatShortcuts({
     enabled: activeThreadId !== null && !backgroundThread,
     embedded,
@@ -2945,6 +3058,17 @@ export default function ChatView(props: ChatViewProps) {
     commands: {
       ...terminalShortcuts,
       ...rightPanelShortcuts,
+      "tab.next": ({ event }) => navigateSurfaceTabs(event.target, "next"),
+      "tab.previous": ({ event }) => navigateSurfaceTabs(event.target, "previous"),
+      "tab.thread": () => returnToThreadTab(),
+      ...Object.fromEntries(
+        TAB_JUMP_KEYBINDING_COMMANDS.map((command, index) => [
+          command,
+          ({ event }: { event: KeyboardEvent }) => navigateSurfaceTabs(event.target, index),
+        ]),
+      ),
+      "rightPanel.close": ({ event }) =>
+        closeActiveRightPanelSurfaceStable(event.target, false, event.repeat),
       ...threadLifecycleShortcuts,
       "thread.copyReference": ({ event }) => {
         if (!event.repeat) copyActiveThreadReference();
@@ -2952,6 +3076,7 @@ export default function ChatView(props: ChatViewProps) {
       "chat.find": () => {
         if (!isServerThread || serverConfig?.threadFind !== true || activeThreadKey === null)
           return false;
+        revealThreadTab();
         openThreadFind(activeThreadKey);
       },
       "composer.cycleHost": ({ event }) => {
@@ -2974,6 +3099,7 @@ export default function ChatView(props: ChatViewProps) {
         if (!canInterruptRunningThread) return false;
         if (!event.repeat) void onInterruptStable();
       },
+      "threadPanel.toggle": () => toggleThreadPanelInLayout(),
     },
     fallback: (command) => {
       const scriptId = projectScriptIdFromCommand(command);
@@ -2983,18 +3109,29 @@ export default function ChatView(props: ChatViewProps) {
     },
   });
 
-  const closeActiveRightPanelSurfaceStable = useStableCallback(() => {
-    if (activeRightPanelSurface) closeRightPanelSurface(activeRightPanelSurface);
-  });
-
   // A focused desktop browser page forwards these chords as menu actions.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to desktop bridge menu actions that toggle or close the right panel
   useEffect(() => {
     if (embedded || backgroundThread) return;
     return window.desktopBridge?.onMenuAction((action) => {
-      if (action === "rightPanel.toggle") toggleRightPanelStable();
-      else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximizedStable();
-      else if (action === "rightPanel.close") closeActiveRightPanelSurfaceStable();
+      if (action === "rightPanel.toggle") {
+        toggleRightPanelStable();
+      } else if (action === "rightPanel.toggleMaximized") {
+        toggleRightPanelMaximizedStable();
+      } else if (action === "rightPanel.close") {
+        closeActiveRightPanelSurfaceStable(document.activeElement, true);
+      } else if (action === "tab.thread") {
+        returnToThreadTab();
+      } else if (action === "tab.next" || action === "tab.previous") {
+        navigateSurfaceTabs(
+          document.activeElement,
+          action === "tab.next" ? "next" : "previous",
+          true,
+        );
+      } else {
+        const index = TAB_JUMP_KEYBINDING_COMMANDS.findIndex((command) => command === action);
+        if (index >= 0) navigateSurfaceTabs(document.activeElement, index, true);
+      }
     });
   }, [
     embedded,
@@ -3002,6 +3139,8 @@ export default function ChatView(props: ChatViewProps) {
     toggleRightPanelStable,
     toggleRightPanelMaximizedStable,
     closeActiveRightPanelSurfaceStable,
+    navigateSurfaceTabs,
+    returnToThreadTab,
   ]);
 
   usePasteToFocusComposer(embedded ? null : activeThreadId, composerRef);
@@ -3052,7 +3191,6 @@ export default function ChatView(props: ChatViewProps) {
                   )
                 ? gt("Available once the thread's worktree is set up.")
                 : null;
-  const openSideChatStable = useStableCallback(() => void sideChat.open());
   const openSurfaceInMainView = useOpenSurfaceInMainView(activeThreadRef);
   const sendSideChatStable = useStableCallback(sideChat.open);
   const { onConfirmRevertStable, onForkFromRunStable, onRevertTimelineTurnStable } =
@@ -3437,67 +3575,115 @@ export default function ChatView(props: ChatViewProps) {
     runShellCommand: runSideChatShellCommandStable,
   };
 
+  const pinnedThreadTab = { active: !surfaceTabActive, onSelect: selectThreadTab };
+  const splitMainTerminal = useStableCallback(() =>
+    splitPanelTerminalStable("horizontal", mainSurface),
+  );
+  const splitMainTerminalVertical = useStableCallback(() =>
+    splitPanelTerminalVerticalStable(mainSurface),
+  );
+  const addMainTerminal = useStableCallback(() => addTerminalSurfaceStable("main"));
+  const activateMainTerminal = useStableCallback((terminalId: string) =>
+    activatePanelTerminalStable(terminalId, mainSurface),
+  );
+  const mainTerminalActions = {
+    onSplitTerminal: splitMainTerminal,
+    onSplitTerminalVertical: splitMainTerminalVertical,
+    onNewTerminal: addMainTerminal,
+    onActiveTerminalChange: activateMainTerminal,
+  };
+  const sidebarTerminalActions = {
+    onSplitTerminal: () => splitPanelTerminalStable(),
+    onSplitTerminalVertical: () => splitPanelTerminalVerticalStable(),
+    onNewTerminal: () => addTerminalSurfaceStable(),
+    onActiveTerminalChange: (id: string) => activatePanelTerminalStable(id),
+  };
+
   if (!activeThread) {
     return embedded ? null : <NoActiveThreadState />;
   }
 
-  const rightPanelContent = activeThreadRef ? (
-    <RightPanelSurfaceContent
-      surface={renderedRightPanelSurface}
-      activeSurfaceId={activeRightPanelSurface?.id ?? null}
-      threadRef={activeThreadRef}
-      environmentId={activeThread.environmentId}
-      visible={rightPanelOpen}
-      composerDraftTarget={composerDraftTarget}
-      keybindings={keybindings}
-      configuredPreviewUrls={configuredPreviewUrls}
-      workspaceMutationId={workspaceMutationId}
-      workspaceRevision={workspaceRevision.revision}
-      getShortcutContext={getShortcutContextStable}
-      onSendAnnotation={sendPreviewAnnotationStable}
-      onCloseSurface={closeRightPanelSurface}
-      sideChatParentPanel={sideChatParentPanel}
-      terminal={{
-        launchContext: activeTerminalLaunchContext ?? null,
-        keybindings,
-        onAddTerminalContext: addTerminalContextToDraftStable,
-        onSplitTerminal: splitPanelTerminalStable,
-        onSplitTerminalVertical: splitPanelTerminalVerticalStable,
-        onNewTerminal: addTerminalSurfaceStable,
-        onActiveTerminalChange: activatePanelTerminalStable,
-        onCloseTerminal: closePanelTerminalStable,
-        splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
-        splitVerticalShortcutLabel: splitTerminalVerticalShortcutLabel ?? undefined,
-        newShortcutLabel: newTerminalShortcutLabel ?? undefined,
-        closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
-      }}
-      pullRequest={{
-        capabilityKnown: pullRequestsCapabilityKnown,
-        supported: supportsPullRequests,
-        projectId: activeThread.projectId,
-        pullRequests: visiblePullRequests,
-        linkedPullRequest: linkedThreadPullRequest,
-        branchPullRequest: activeThreadShell?.branchPullRequest ?? activeThread.branchPullRequest,
-        onBack:
-          pullRequestsSurfaceAvailable && visiblePullRequestCount > 1
-            ? addPullRequestsSurfaceStable
-            : undefined,
-      }}
-      issuesSupported={serverConfig?.environment.capabilities.issues === true}
-      files={{
-        projectId: activeProject?.id,
-        projectName: activeProject?.title ?? null,
-        workspaceRoot: activeWorkspaceRoot,
-        availableEditors,
-        pendingSurfaceIds: pendingFileSurfaceIds,
-        onOpenFile: openFileSurfaceStable,
-        onPendingChange: handleFilePendingChangeStable,
-      }}
-    />
-  ) : null;
+  const viewContent = (
+    surface: RightPanelSurface | null,
+    placement: SurfacePlacement,
+    visible: boolean,
+  ) =>
+    activeThreadRef ? (
+      <RightPanelSurfaceContent
+        surface={surface}
+        activeSurfaceId={visible ? (surface?.id ?? null) : null}
+        placement={placement}
+        threadRef={activeThreadRef}
+        environmentId={activeThread.environmentId}
+        visible={visible}
+        composerDraftTarget={composerDraftTarget}
+        keybindings={keybindings}
+        configuredPreviewUrls={configuredPreviewUrls}
+        workspaceMutationId={workspaceMutationId}
+        workspaceRevision={workspaceRevision.revision}
+        getShortcutContext={getShortcutContextStable}
+        onSendAnnotation={sendPreviewAnnotationStable}
+        onCloseSurface={closeRightPanelSurface}
+        sideChatParentPanel={sideChatParentPanel}
+        terminal={{
+          launchContext: activeTerminalLaunchContext ?? null,
+          keybindings,
+          onAddTerminalContext: addTerminalContextToDraftStable,
+          ...(placement === "main" ? mainTerminalActions : sidebarTerminalActions),
+          onCloseTerminal: closePanelTerminalStable,
+          splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
+          splitVerticalShortcutLabel: splitTerminalVerticalShortcutLabel ?? undefined,
+          newShortcutLabel: newTerminalShortcutLabel ?? undefined,
+          closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
+        }}
+        pullRequest={{
+          capabilityKnown: pullRequestsCapabilityKnown,
+          supported: supportsPullRequests,
+          projectId: activeThread.projectId,
+          pullRequests: visiblePullRequests,
+          linkedPullRequest: linkedThreadPullRequest,
+          branchPullRequest: activeThreadShell?.branchPullRequest ?? activeThread.branchPullRequest,
+          onBack:
+            pullRequestsSurfaceAvailable && visiblePullRequestCount > 1
+              ? () => withSurfacePlacement(placement, addPullRequestsSurfaceStable)
+              : undefined,
+        }}
+        issuesSupported={serverConfig?.environment.capabilities.issues === true}
+        files={{
+          projectId: activeProject?.id,
+          projectName: activeProject?.title ?? null,
+          workspaceRoot: activeWorkspaceRoot,
+          availableEditors,
+          pendingSurfaceIds: pendingFileSurfaceIds,
+          onOpenFile: (path) => withSurfacePlacement(placement, () => openFileSurfaceStable(path)),
+          onPendingChange: handleFilePendingChangeStable,
+        }}
+      />
+    ) : null;
+  const surfaceLauncherActions = (placement: SurfacePlacement) =>
+    ({
+      onAddBrowser: () => createBrowserSurface(undefined, undefined, placement),
+      onAddBrowserInProfile: (id: string) => createBrowserSurfaceStable(id, undefined, placement),
+      onAddTerminal: () => addTerminalSurfaceStable(placement),
+      onAddDiff: () => withSurfacePlacement(placement, addDiffSurfaceStable),
+      onAddFiles: () => withSurfacePlacement(placement, addFilesSurfaceStable),
+      onAddPullRequest: () => withSurfacePlacement(placement, addPullRequestSurfaceStable),
+      onAddPullRequests: () => withSurfacePlacement(placement, addPullRequestsSurfaceStable),
+      onAddDevice: () => addDeviceSurfaceStable(placement),
+      onAddSideChat: sideChatsOffered ? () => void sideChat.open(undefined, placement) : undefined,
+      browserAvailable: canOperatePreview && browserAvailable,
+      terminalAvailable: terminalSurfaceAvailable,
+      diffAvailable: isServerThread && diffAvailable,
+      filesAvailable: activeProject !== null,
+      pullRequestAvailable: pullRequestSurfaceAvailable,
+      pullRequestsAvailable: linkedItemsSurfaceAvailable,
+      deviceAvailable: activeThreadRef !== null,
+      sideChatAvailable: sideChat.available,
+      sideChatDisabledReason,
+    }) satisfies SurfaceLauncherActions;
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,
-    terminalOpen: terminalUiState.terminalOpen,
+    terminalOpen: terminalUiState.terminalOpen && !surfaceTabActive,
     terminalShortcutLabel: shortcutLabelForCommand(keybindings, "terminal.toggle"),
     threadPanelOpen,
     threadPanelPresentation,
@@ -3507,7 +3693,7 @@ export default function ChatView(props: ChatViewProps) {
     rightPanelOpen,
     rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
     onToggleTerminal: toggleTerminalVisibilityStable,
-    onToggleThreadPanel: toggleThreadPanelStable,
+    onToggleThreadPanel: toggleThreadPanelInLayout,
     onToggleRightPanel: toggleRightPanelStable,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
@@ -3528,16 +3714,84 @@ export default function ChatView(props: ChatViewProps) {
       {panelToggleControls}
     </WorkspaceTitlebarControls>
   );
+  const rightPanelTabProps = (placement: SurfacePlacement) => ({
+    ...surfaceLauncherActions(placement),
+    tabMotionDurationMs: panelAnimationDurationMs,
+    keybindings,
+    getShortcutContext: getShortcutContextStable,
+    pendingSurfaceIds: pendingFileSurfaceIds,
+    previewSessions: activePreviewState.sessions,
+    desktopByTabId: activePreviewState.desktopByTabId,
+    previewRuntimeTabId: resolvePreviewRuntimeTabId,
+    terminalLabelsById: activeTerminalLabelsById,
+    onActivate: activateRightPanelSurfaceStable,
+    onCloseSurface: closeRightPanelSurfaceStable,
+    onOpenInMainView: openSurfaceInMainView,
+    onRenameDevice: (surfaceId: string, title: string) => {
+      if (activeThreadRef)
+        useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
+    },
+    onCloseOtherSurfaces: closeOtherRightPanelSurfacesStable,
+    onCloseSurfacesToRight: closeRightPanelSurfacesToRightStable,
+    onCloseAllSurfaces: () => closeAllRightPanelSurfacesStable(placement),
+    onMoveSurface: moveRightPanelSurfaceStable,
+    onCopyFilePath: copyRightPanelFilePathStable,
+    onDuplicateBrowser: (surface: RightPanelSurface) =>
+      duplicateBrowserSurfaceStable(surface, placement),
+  });
+  const chatHeader = (pinnedTab?: { active: boolean; onSelect: () => void }) => (
+    <ChatHeader
+      activeThreadEnvironmentId={activeThread.environmentId}
+      activeThreadId={activeThread.id}
+      isServerThread={isServerThread}
+      activeThreadTitle={activeThread.title}
+      activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
+      activeProject={activeProject ?? null}
+      parentThreadLink={headerParentThreadLink}
+      onOpenThread={onOpenRelatedThreadStable}
+      rightPanelOpen={inlineRightPanelOwnsTitleBar}
+      {...(pinnedTab ? { pinnedTab } : {})}
+      onNewThreadInProject={handleNewThreadInActiveProjectStable}
+      {...(activeDraftLogicalProjectKey
+        ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
+        : {})}
+      {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
+    />
+  );
+  const surfaceTabStrip =
+    !embedded && activeThreadRef ? (
+      <RightPanelTabs
+        {...rightPanelTabProps("main")}
+        mode="embedded"
+        key={activeThreadKey}
+        handleNewSurfaceShortcut={handleMainNewSurfaceShortcut}
+        threadTab={chatHeader(pinnedThreadTab)}
+        surfaces={mainSurfaces}
+        environmentId={activeThreadRef.environmentId}
+        activeSurfaceId={mainSurface?.id ?? null}
+      />
+    ) : null;
   const workspaceFileDropHandlers = makeWorkspaceFileDropHandlers({
     setDragActive: setIsWorkspaceFileDragActive,
     addFiles: addDroppedFilesToComposer,
     addFolders: addDroppedFoldersToComposer,
   });
 
+  const previewMiniPlayer =
+    activeThreadRef && shownPreviewMiniPlayer && !embedded ? (
+      <ThreadPreviewMiniPlayer
+        key={`${activeThreadKey}:${previewMiniPlayerSourceKey(shownPreviewMiniPlayer.source)}`}
+        threadRef={activeThreadRef}
+        miniPlayer={shownPreviewMiniPlayer}
+      />
+    ) : null;
   const content = (
     <div
       ref={setWorkspaceLayoutElement}
-      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background",
+        surfaceTabStrip && "[--workspace-topbar-height:2.625rem]",
+      )}
     >
       {embedded ? null : (
         <DeviceSetupDialogHost
@@ -3549,7 +3803,7 @@ export default function ChatView(props: ChatViewProps) {
       {rightPanelControlsAtRoot && !embedded ? panelLayoutControls : null}
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
+          "relative flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
@@ -3566,6 +3820,7 @@ export default function ChatView(props: ChatViewProps) {
           <header
             ref={threadPanelPopoverAnchorRef}
             data-chat-header
+            data-thread-tab-titlebar={surfaceTabStrip ? true : undefined}
             className={cn(
               "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
               isElectron
@@ -3577,6 +3832,7 @@ export default function ChatView(props: ChatViewProps) {
                   )
                 : "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center pl-(--workspace-gutter-start) pr-(--workspace-gutter-end)",
               COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+              surfaceTabStrip && "pl-1 sm:pl-1",
             )}
           >
             {isElectron && rightPanelControlsAtRoot ? (
@@ -3587,26 +3843,23 @@ export default function ChatView(props: ChatViewProps) {
             ) : null}
             {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
-            <ChatHeader
-              activeThreadEnvironmentId={activeThread.environmentId}
-              activeThreadId={activeThread.id}
-              isServerThread={isServerThread}
-              activeThreadTitle={activeThread.title}
-              activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
-              activeProject={activeProject ?? null}
-              parentThreadLink={headerParentThreadLink}
-              onOpenThread={onOpenRelatedThreadStable}
-              rightPanelOpen={inlineRightPanelOwnsTitleBar}
-              onNewThreadInProject={handleNewThreadInActiveProjectStable}
-              {...(activeDraftLogicalProjectKey
-                ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
-                : {})}
-              {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
-            />
+            {surfaceTabStrip ? (
+              <div className={cn("flex h-full min-w-0 flex-1", rightPanelOpen ? "mr-16" : "mr-28")}>
+                {surfaceTabStrip}
+              </div>
+            ) : (
+              chatHeader()
+            )}
           </header>
         )}
 
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div
+          className="relative flex min-h-0 min-w-0 flex-1"
+          // Hidden, not unmounted: the thread keeps its layout, scroll position and draft.
+          style={surfaceTabActive ? { visibility: "hidden" } : undefined}
+          inert={surfaceTabActive}
+          data-chat-column-maximized-away={surfaceTabActive ? "true" : undefined}
+        >
           <ThreadFindCanvas
             findOptions={{
               skills: timelineSkills,
@@ -4105,13 +4358,10 @@ export default function ChatView(props: ChatViewProps) {
             {canOperatePreview && activeThreadRef && activeEnvironmentServerBrowser && !embedded ? (
               <PreviewSessionSync threadRef={activeThreadRef} />
             ) : null}
-            {activeThreadRef && shownPreviewMiniPlayer && !embedded ? (
-              <ThreadPreviewMiniPlayer
-                key={`${activeThreadKey}:${previewMiniPlayerSourceKey(shownPreviewMiniPlayer.source)}`}
-                threadRef={activeThreadRef}
-                miniPlayer={shownPreviewMiniPlayer}
-              />
-            ) : null}
+            {previewMiniPlayer && !surfaceTabActive ? previewMiniPlayer : null}
+            {previewMiniPlayer && surfaceTabActive && surfacePreviewOverlay
+              ? createPortal(previewMiniPlayer, surfacePreviewOverlay)
+              : null}
 
             {embedded ? null : (
               <>
@@ -4209,31 +4459,52 @@ export default function ChatView(props: ChatViewProps) {
         </div>
 
         {embedded ? null : (
-          <ChatTerminalDrawers
-            activeThreadKey={activeThreadKey}
-            activeTerminalOpen={Boolean(terminalUiState.terminalOpen)}
-            composerHeight={composerReservedHeight}
-            launchContext={activeTerminalLaunchContext ?? null}
-            splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
-            splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
-            newShortcutLabel={newTerminalShortcutLabel ?? undefined}
-            closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
-            keybindings={keybindings}
-            onAddTerminalContext={addTerminalContextToDraftStable}
-          />
+          <div
+            className="contents"
+            style={surfaceTabActive ? { visibility: "hidden" } : undefined}
+            inert={surfaceTabActive}
+          >
+            <ChatTerminalDrawers
+              activeThreadKey={activeThreadKey}
+              activeTerminalOpen={Boolean(terminalUiState.terminalOpen)}
+              composerHeight={composerReservedHeight}
+              launchContext={activeTerminalLaunchContext ?? null}
+              splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
+              splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
+              newShortcutLabel={newTerminalShortcutLabel ?? undefined}
+              closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
+              keybindings={keybindings}
+              onAddTerminalContext={addTerminalContextToDraftStable}
+            />
+          </div>
         )}
+        {surfaceTabActive && activeThreadRef ? (
+          <ThreadSurfaceTabPanel
+            focusKey={`panel:${activeThreadRef.environmentId}:${mainSurface.id}`}
+            previewActive={mainSurface.kind === "preview"}
+            label={surfaceTitle(mainSurface, activePreviewState.sessions, activeTerminalLabelsById)}
+          >
+            {viewContent(mainSurface, "main", true)}
+          </ThreadSurfaceTabPanel>
+        ) : null}
+        {surfaceTabActive && previewMiniPlayer ? (
+          <div
+            ref={setSurfacePreviewOverlay}
+            className="pointer-events-none absolute inset-x-0 bottom-0 top-(--chat-header-height) z-20"
+          />
+        ) : null}
       </div>
 
       {rightPanelPresent && activeThreadRef && !embedded ? (
         <ChatRightPanel
+          {...rightPanelTabProps("sidebar")}
+          handleNewSurfaceShortcut={handleSidebarNewSurfaceShortcut}
           sheet={shouldUsePlanSidebarSheet}
           workspaceLayoutElement={workspaceLayoutElement}
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
           sheetAnimationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           onCloseSheet={closePreviewPanelStable}
           open={rightPanelOpen}
-          keybindings={keybindings}
-          getShortcutContext={getShortcutContextStable}
           maximized={rightPanelMaximized}
           layoutControls={
             rightPanelOpen ? (
@@ -4249,44 +4520,8 @@ export default function ChatView(props: ChatViewProps) {
           surfaces={renderedRightPanelSurfaces}
           environmentId={activeThreadRef.environmentId}
           activeSurfaceId={renderedRightPanelSurface?.id ?? null}
-          pendingSurfaceIds={pendingFileSurfaceIds}
-          previewSessions={activePreviewState.sessions}
-          desktopByTabId={activePreviewState.desktopByTabId}
-          previewRuntimeTabId={resolvePreviewRuntimeTabId}
-          terminalLabelsById={activeTerminalLabelsById}
-          onActivate={activateRightPanelSurfaceStable}
-          onCloseSurface={closeRightPanelSurfaceStable}
-          onOpenInMainView={openSurfaceInMainView}
-          onRenameDevice={(surfaceId, title) => {
-            if (activeThreadRef)
-              useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
-          }}
-          onCloseOtherSurfaces={closeOtherRightPanelSurfacesStable}
-          onCloseSurfacesToRight={closeRightPanelSurfacesToRightStable}
-          onCloseAllSurfaces={closeAllRightPanelSurfacesStable}
-          onMoveSurface={moveRightPanelSurfaceStable}
-          onCopyFilePath={copyRightPanelFilePathStable}
-          onAddBrowser={() => createBrowserSurface()}
-          onAddBrowserInProfile={createBrowserSurfaceStable}
-          onDuplicateBrowser={duplicateBrowserSurfaceStable}
-          onAddTerminal={addTerminalSurfaceStable}
-          onAddDiff={addDiffSurfaceStable}
-          onAddFiles={addFilesSurfaceStable}
-          onAddPullRequest={addPullRequestSurfaceStable}
-          onAddPullRequests={addPullRequestsSurfaceStable}
-          onAddDevice={addDeviceSurfaceStable}
-          onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
-          browserAvailable={canOperatePreview && browserAvailable}
-          terminalAvailable={activeProject !== null && canOperateTerminal}
-          diffAvailable={isServerThread && diffAvailable}
-          filesAvailable={activeProject !== null}
-          pullRequestAvailable={pullRequestSurfaceAvailable}
-          pullRequestsAvailable={linkedItemsSurfaceAvailable}
-          deviceAvailable={activeThreadRef !== null}
-          sideChatAvailable={sideChat.available}
-          sideChatDisabledReason={sideChatDisabledReason}
         >
-          {rightPanelContent}
+          {viewContent(renderedRightPanelSurface, "sidebar", rightPanelOpen)}
         </ChatRightPanel>
       ) : null}
 

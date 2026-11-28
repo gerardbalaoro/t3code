@@ -54,6 +54,17 @@ on macOS and Ctrl on Windows and Linux, including GNOME, KDE Plasma, Niri, and
 Hyprland. If a custom desktop shortcut takes the same keys, choose another binding
 in Settings.
 
+## Workspace tabs
+
+Use `Ctrl+Tab` and `Ctrl+Shift+Tab` to cycle through tabs in the focused pane.
+The main strip includes the thread in that cycle. Press `mod+1` to return to
+the thread from a full-width tab or the right sidebar. Press `mod+2` through
+`mod+9` to select the first through eighth surface tab in the focused pane.
+
+Press `mod+l` to open Pull Requests. Inside a browser preview, that shortcut
+focuses the URL field. In an ordinary browser window, the browser may reserve
+these chords. Use the desktop app or customize the bindings in Settings.
+
 ## Copy pull request references
 
 With a PR open in the right panel or on the Pull requests page, use `mod+shift+c`
@@ -127,10 +138,12 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `rightPanelOpen`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`,
+`previewOpen`, `rightPanelOpen`, `threadSurfaceTabs`, `surfaceTabNavigation`,
+`surfaceTabReturn`, `modelPickerOpen`, `usagePageOpen`,
+`composerFocus`,
 `draftThreadRoute`, `turnRunning`, `composerEmpty`, `editableFocus`, `isWeb`, and `isDesktop`.
-In a thread, `rightPanelOpen` is true while its right panel is open; the default
-`mod+t` uses it to open the panel's new-tab menu.
+In a thread, `rightPanelOpen` is true while its right sidebar is open.
+`threadSurfaceTabs` is true for the full-width tab launcher.
 `draftThreadRoute` is true on a draft thread, including a restored draft, until it is first sent.
 `composerEmpty` is true while the composer has no text, attachments, or context, and is not
 editing a queued message or answering a question.
@@ -139,7 +152,8 @@ the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
 desktop app. Unknown keys evaluate to `false`.
 
 `mod+1` through `mod+9` jump to the first nine threads, and to models while the
-model picker is open. The thread jumps do not run while the model picker is open.
+model picker is open. The thread jumps do not run while the model picker is open. Workspace tab shortcuts
+take precedence while they apply.
 Those defaults use `isDesktop` so they do not steal the
 browser's tab-switch shortcuts. Remove that condition in Settings if you want
 the same jumps in a browser.

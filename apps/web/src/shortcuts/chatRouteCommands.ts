@@ -8,6 +8,7 @@ import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { dispatchPreviewAction, type PreviewAction } from "../components/preview/previewActionBus";
+import { readPullRequestListPreferences } from "../components/pullRequest/pullRequestListPreferences";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
 import { isBrowserSurfaceFocused } from "../lib/previewFocus";
 import { shouldCreateNewThreadInCurrentProject } from "../components/Sidebar.logic";
@@ -25,7 +26,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { readProjects, readThreadShell } from "../state/entities";
 import { defaultProjectFallbackReadyAtom } from "../state/projects";
-import { environmentPresentations } from "../state/presentation";
+import { environmentPresentations, environmentSummaries } from "../state/presentation";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
 import { readEnvironmentScope } from "../state/session";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -139,6 +140,12 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
   return registerCommands(
     {
       "chat.newLocal": startNewLocal,
+      "pullRequests.open": (event) => {
+        if (!appAtomRegistry.get(environmentSummaries.pullRequestsSupportedAtom)) return false;
+        claim(event);
+        if (!event.repeat)
+          void router.navigate({ to: "/pull-requests", search: readPullRequestListPreferences() });
+      },
       "chat.newWithoutProject": (event) => {
         const { activeThread, activeDraftThread } = readThreadContext();
         const environmentId = scratch.scratchEnvironmentId(

@@ -8,6 +8,7 @@ import {
   type ResolvedKeybindingRule,
   type ResolvedKeybindingsConfig,
   THREAD_JUMP_KEYBINDING_COMMANDS,
+  TAB_JUMP_KEYBINDING_COMMANDS,
 } from "@t3tools/contracts";
 
 export {
@@ -67,7 +68,11 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+j", command: "terminal.toggle" },
   { key: "mod+alt+b", command: "rightPanel.toggle" },
   { key: "mod+shift+b", command: "threadPanel.toggle", when: "!terminalFocus" },
-  { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+  {
+    key: "mod+t",
+    command: "rightPanel.new",
+    when: "(rightPanelOpen || threadSurfaceTabs) && !terminalFocus",
+  },
   { key: "mod+d", command: "terminal.split", when: "terminalFocus" },
   { key: "mod+shift+d", command: "terminal.splitVertical", when: "terminalFocus" },
   { key: "mod+shift+d", command: "composer.dictation", when: "!terminalFocus" },
@@ -81,6 +86,17 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+shift+j", command: "preview.toggle" },
   { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
   { key: "mod+l", command: "preview.focusUrl", when: "previewFocus" },
+  {
+    key: "mod+l",
+    command: "pullRequests.open",
+    when: "!previewFocus && !terminalFocus && !modelPickerOpen",
+  },
+  { key: "ctrl+tab", command: "tab.next", when: "surfaceTabNavigation && !modelPickerOpen" },
+  {
+    key: "ctrl+shift+tab",
+    command: "tab.previous",
+    when: "surfaceTabNavigation && !modelPickerOpen",
+  },
   { key: "mod+=", command: "preview.zoomIn", when: "previewFocus" },
   { key: "mod++", command: "preview.zoomIn", when: "previewFocus" },
   { key: "mod+-", command: "preview.zoomOut", when: "previewFocus" },
@@ -140,6 +156,12 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     key: `mod+${index + 1}`,
     command,
     when: "!modelPickerOpen && isDesktop",
+  })),
+  { key: "mod+1", command: "tab.thread", when: "surfaceTabReturn && !modelPickerOpen" },
+  ...TAB_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
+    key: `mod+${index + 2}`,
+    command,
+    when: "surfaceTabNavigation && !modelPickerOpen",
   })),
   ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
     key: `mod+${index + 1}`,

@@ -27,7 +27,9 @@ import {
 import {
   rightPanelHostRef,
   selectSelectedRightPanelSurface,
+  type SurfacePlacement,
   useRightPanelStore,
+  withSurfacePlacement,
 } from "~/rightPanelStore";
 
 import { resolveBrowserDefaults } from "./browserDefaults";
@@ -64,6 +66,7 @@ export async function openUrlInPreview<E>(input: {
   readonly openPreview: OpenPreviewMutation<E>;
   readonly profileId?: PreviewOpenInput["profileId"];
   readonly background?: boolean;
+  readonly placement?: SurfacePlacement;
 }): Promise<AtomCommandResult<void, E | BrowserSettingsReadError>> {
   // Read before any await: a side chat pane that unmounts meanwhile drops its host mapping.
   const threadRef = rightPanelHostRef(input.threadRef);
@@ -107,7 +110,9 @@ export async function openUrlInPreview<E>(input: {
       return;
     }
     applyPreviewServerSnapshot(threadRef, snapshot);
-    useRightPanelStore.getState().openBrowser(threadRef, snapshot.tabId);
+    const openBrowser = () => useRightPanelStore.getState().openBrowser(threadRef, snapshot.tabId);
+    if (input.placement) withSurfacePlacement(input.placement, openBrowser);
+    else openBrowser();
   });
 }
 

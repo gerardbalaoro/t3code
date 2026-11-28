@@ -7,7 +7,7 @@ import {
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { RightPanelSurface } from "~/rightPanelStore";
+import type { RightPanelSurface, SurfacePlacement } from "~/rightPanelStore";
 
 import { act, render } from "../../../test/render";
 
@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn<(request: unknown) => Promise<CommandResult>>(),
   list: vi.fn<(request: unknown) => Promise<CommandResult>>(),
   openDevice: vi.fn(),
+  placeDevice: vi.fn(),
   closeSurface: vi.fn(),
 }));
 const phone = {
@@ -95,6 +96,10 @@ vi.mock("~/rightPanelStore", () => ({
     }),
   },
   selectThreadRightPanelState: () => ({ isOpen: false, activeSurfaceId: null, surfaces: [] }),
+  withSurfacePlacement: (placement: SurfacePlacement, update: () => void) => {
+    mocks.placeDevice(placement);
+    update();
+  },
 }));
 vi.mock("~/components/device/DeviceHostUpdates", () => ({ DeviceHostUpdates: () => null }));
 vi.mock("~/components/device/DeviceWorkspace", () => ({
@@ -134,12 +139,17 @@ const deferred = () => {
 
 let container: HTMLDivElement;
 // Fixed key and a changing threadRef, as RightPanelSurfaceContent mounts it.
-const devicePanel = (threadRef: ScopedThreadRef, surface = picker) => (
+const devicePanel = (
+  threadRef: ScopedThreadRef,
+  surface = picker,
+  placement: SurfacePlacement = "sidebar",
+) => (
   <DevicePanel
     key="device-panel"
     mode="embedded"
     threadRef={threadRef}
     surface={surface}
+    placement={placement}
     visible
     onDismissSetup={() => undefined}
   />
@@ -196,6 +206,20 @@ describe("DevicePanel thread switches", () => {
       [threadB, phoneTarget],
       [threadA, phoneTarget],
     ]);
+  });
+
+  it("keeps the picker placement when device startup outlives its render", async () => {
+    setup();
+    const pending = deferred();
+    mocks.open.mockReturnValueOnce(pending.promise);
+    await using screen = await render(devicePanel(threadA, picker, "main"), { container });
+    await click(startButton());
+    await screen.rerender(devicePanel(threadB));
+
+    await act(async () => pending.settle(opened));
+
+    expect(mocks.placeDevice).toHaveBeenCalledExactlyOnceWith("main");
+    expect(mocks.openDevice).toHaveBeenCalledExactlyOnceWith(threadA, phoneTarget);
   });
 });
 
