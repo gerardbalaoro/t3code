@@ -243,6 +243,9 @@ catalogs:
     jose:
       specifier: 6.2.2
       version: 6.2.2
+    lucide-react:
+      specifier: ^0.564.0
+      version: 0.564.0
     mdast-util-directive:
       specifier: 3.1.0
       version: 3.1.0
@@ -1005,6 +1008,12 @@ importers:
       proper-lockfile:
         specifier: 4.1.2
         version: 4.1.2
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
       saxes:
         specifier: 6.0.0
         version: 6.0.0
@@ -1280,7 +1289,7 @@ importers:
         specifier: ^0.18.2
         version: 0.18.10
       lucide-react:
-        specifier: ^0.564.0
+        specifier: 'catalog:'
         version: 0.564.0(react@19.3.0)
       parse5:
         specifier: 8.0.1
@@ -2224,6 +2233,9 @@ importers:
       hast-util-sanitize:
         specifier: ^5.0.2
         version: 5.0.2
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.564.0(react@19.3.0)
       mdast-util-directive:
         specifier: 'catalog:'
         version: 3.1.0(supports-color@8.1.1)

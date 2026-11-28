@@ -108,11 +108,13 @@ export const ProjectMonogramText = TrimmedNonEmptyString.check(
   Schema.isPattern(/^[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d]*$/u),
 );
 
-const ProjectLucideIcon = Schema.Struct({
+export const ProjectLucideIcon = Schema.Struct({
   kind: Schema.Literal("lucide"),
   name: ProjectLucideIconName,
   color: ProjectIconColor,
 });
+export type ProjectLucideIcon = typeof ProjectLucideIcon.Type;
+
 const ProjectEmojiIcon = Schema.Struct({
   kind: Schema.Literal("emoji"),
   emoji: ProjectEmoji,

@@ -72,10 +72,10 @@ export function resolveProjectChipIcon(
 ): ProjectChipIcon | null {
   if (!project || isScratchProject(project, scratchWorkspaceRoot)) return null;
   const glyph = resolveProjectIconGlyph(project.projectIcon, project.title);
-  if (glyph) return glyph;
+  if (glyph && project.projectIcon?.kind !== "lucide") return glyph;
   const url = faviconUrl();
   if (url && !isProjectFaviconFallbackUrl(url)) return { kind: "favicon", uri: url };
-  return projectAutoMonogram(project.title);
+  return glyph ?? projectAutoMonogram(project.title);
 }
 
 const PROJECT_ICON_COLOR_CLASSES: Record<

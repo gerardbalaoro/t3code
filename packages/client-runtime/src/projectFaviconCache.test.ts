@@ -56,6 +56,21 @@ describe("persistent project favicon cache", () => {
     expect(cache.peek({ ...target, environmentId: EnvironmentId.make("other") })).toBeNull();
   });
 
+  it("restores a Lucide icon only for the matching name and color", async () => {
+    const { cache, load, storage } = fixture();
+    const icon = { kind: "lucide", name: "rocket", color: "blue" } as const;
+    const lucide = { ...target, icon };
+    await cache.resolve(lucide, url, signal());
+    await cache.flush();
+
+    const offline = createProjectFaviconCache({ storage, load });
+    await offline.hydrate();
+    expect(offline.peek(lucide)).toBe(image);
+    expect(offline.peek(target)).toBeNull();
+    expect(offline.peek({ ...target, icon: { ...icon, color: "red" } })).toBeNull();
+    expect(offline.peek({ ...target, icon: { ...icon, name: "alarm-clock" } })).toBeNull();
+  });
+
   it.each([
     {
       scope: "one environment",

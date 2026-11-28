@@ -34,6 +34,32 @@ import {
 } from "./assets.ts";
 
 describe("project favicon URL cache", () => {
+  it("requests the selected Lucide asset and keys it separately from a file favicon", () => {
+    const registry = AtomRegistry.make();
+    const resources: AssetResource[] = [];
+    const favicon = createProjectFaviconUrlAtomFamily({
+      createUrl: ({ input }) => {
+        resources.push(input.resource);
+        return Atom.make(AsyncResult.initial<AssetCreateUrlResult, unknown>());
+      },
+      preparedConnection: () => Atom.make(Option.some({ httpBaseUrl: "https://remote.test" })),
+    });
+    const target = { environmentId: EnvironmentId.make("remote"), cwd: "/workspace" };
+    const icon = { kind: "lucide", name: "rocket", color: "blue" } as const;
+    try {
+      expect(registry.get(favicon(target))).toBeNull();
+      expect(registry.get(favicon({ ...target, icon }))).toBeNull();
+      expect(registry.get(favicon({ ...target, icon: { ...icon, color: "red" } }))).toBeNull();
+      expect(resources).toEqual([
+        { _tag: "project-favicon", cwd: target.cwd },
+        { _tag: "project-lucide-icon", icon },
+        { _tag: "project-lucide-icon", icon: { ...icon, color: "red" } },
+      ]);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it("does not reuse another environment, workspace, or selected icon's cached URL", () => {
     const registry = AtomRegistry.make();
     const result = Atom.make<AsyncResult.AsyncResult<AssetCreateUrlResult, unknown>>(

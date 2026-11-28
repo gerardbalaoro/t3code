@@ -1,3 +1,4 @@
+import type { ProjectLucideIcon } from "@t3tools/contracts";
 import { WORKSPACE_IMAGE_PREVIEW_EXTENSIONS } from "./mediaPreview.ts";
 
 export const PROJECT_FAVICON_FALLBACK_MARKER = "project-favicon-missing";
@@ -13,7 +14,12 @@ export function getProjectFaviconResourceKey(
   environmentId: string,
   workspaceRoot: string,
   faviconPath?: string | null,
+  icon?: ProjectLucideIcon,
 ) {
+  if (icon) {
+    const { name, color } = icon;
+    return JSON.stringify([environmentId, workspaceRoot, null, { kind: "lucide", name, color }]);
+  }
   return JSON.stringify([environmentId, workspaceRoot, faviconPath || null]);
 }
 

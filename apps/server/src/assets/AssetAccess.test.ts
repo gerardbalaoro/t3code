@@ -7,6 +7,7 @@ import {
   AssetAccessError,
   AssetCreateUrlInput,
   AssetPreviewTypeValidationError,
+  type ProjectLucideIcon,
   SOURCE_CONTROL_MEDIA_ASSET,
   ThreadId,
   TurnItemId,
@@ -1861,6 +1862,30 @@ describe("AssetAccess", () => {
       ).toEqual({ kind: "file", path: attachmentPath });
     }).pipe(Effect.provide(layerTest)),
   );
+  it.effect("serves a signed Lucide SVG with a content-specific URL", () =>
+    Effect.gen(function* () {
+      const icon = { kind: "lucide", name: "alarm-check", color: "blue" } as const;
+      const issue = (selected: ProjectLucideIcon) =>
+        issueAssetUrl({
+          resource: { _tag: "project-lucide-icon", icon: selected },
+        });
+      const blue = yield* issue(icon);
+      const red = yield* issue({ ...icon, color: "red" });
+      const [token, fileName] = blue.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length).split("/");
+      expect(red.relativeUrl.split("/").at(-1)).not.toBe(fileName);
+      expect(yield* resolveAsset(token!, "other.svg")).toBeNull();
+
+      const asset = yield* resolveAsset(token!, fileName!);
+      expect(asset).toMatchObject({ kind: "bytes", mimeType: "image/svg+xml" });
+      const svg = asset?.kind === "bytes" ? Buffer.from(asset.bytes).toString("utf8") : "";
+      expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+      expect(svg).toContain('stroke="#3b82f6"');
+      expect(svg).toContain("lucide-alarm-clock-check");
+      const unknown = yield* Effect.flip(issue({ ...icon, name: "create-lucide-icon" }));
+      expect(unknown._tag).toBe("AssetProjectFaviconNotFoundError");
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   it.effect("issues project favicon capabilities with a signed fallback", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

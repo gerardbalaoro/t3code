@@ -18,6 +18,7 @@ import {
   NativeAppIconReference,
   TurnItemId,
   EnvironmentThemeId,
+  ProjectLucideIcon,
 } from "@t3tools/contracts";
 import {
   hostPreviewMimeTypeFromExtension,
@@ -181,6 +182,13 @@ const AssetClaimsSchema = Schema.Union([
   }),
   Schema.Struct({
     version: Schema.Literal(1),
+    kind: Schema.Literal("project-lucide-icon"),
+    icon: ProjectLucideIcon,
+    fileName: Schema.String,
+    expiresAt: Schema.Number,
+  }),
+  Schema.Struct({
+    version: Schema.Literal(1),
     kind: Schema.Literal("native-app-icon"),
     app: NativeAppIconReference,
     expiresAt: Schema.Number,
@@ -283,6 +291,19 @@ const readToolOutputImage = Effect.fn("AssetAccess.readToolOutputImage")(functio
     ? null
     : { mimeType: image.mimeType, bytes: Buffer.from(image.data, "base64") };
 });
+
+const renderProjectLucideIcon = (icon: ProjectLucideIcon) =>
+  Effect.tryPromise({
+    try: async () => {
+      const renderer = await import("../project/ProjectLucideIconImage.mjs");
+      return renderer.renderProjectLucideIcon(icon);
+    },
+    catch: (cause) =>
+      new AssetProjectFaviconInspectionError({
+        resource: { _tag: "project-lucide-icon", icon },
+        cause,
+      }),
+  });
 
 // Browsers cannot draw .icns; serve its embedded PNG.
 const projectFaviconAsset = Effect.fn("AssetAccess.projectFaviconAsset")(function* (
@@ -788,6 +809,28 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = input.resource.fileName ?? path.basename(attachmentPath);
       break;
     }
+    case "project-lucide-icon": {
+      const svg = yield* renderProjectLucideIcon(input.resource.icon);
+      if (svg === null) {
+        return yield* new AssetProjectFaviconNotFoundError({ resource: input.resource });
+      }
+      const digest = yield* Digest.Digest;
+      const revision = yield* digest.digest(Digest.sha256, svg).pipe(
+        Effect.map(Hex.encode),
+        Effect.mapError(
+          (cause) => new AssetProjectFaviconInspectionError({ resource: input.resource, cause }),
+        ),
+      );
+      fileName = `lucide-${revision}.svg`;
+      claims = {
+        version: 1,
+        kind: "project-lucide-icon",
+        icon: input.resource.icon,
+        fileName,
+        expiresAt,
+      };
+      break;
+    }
     case "project-favicon": {
       const workspaceRoot = yield* workspacePaths.normalizeWorkspaceRoot(input.resource.cwd).pipe(
         Effect.mapError(
@@ -962,7 +1005,11 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
     }
   }
 
-  if (claims.kind === "project-favicon" || claims.kind === "project-favicon-external") {
+  if (
+    claims.kind === "project-favicon" ||
+    claims.kind === "project-favicon-external" ||
+    claims.kind === "project-lucide-icon"
+  ) {
     const issuedAt = yield* Clock.currentTimeMillis;
     expiresAt =
       (Math.floor(issuedAt / PROJECT_FAVICON_TOKEN_BUCKET_MS) + 2) *
@@ -1098,6 +1145,17 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
       Effect.orElseSucceed(() => null),
     );
     return file ? ({ kind: "file", path: background.path, file } satisfies ResolvedAsset) : null;
+  }
+
+  if (claims.kind === "project-lucide-icon") {
+    if (relativePath !== claims.fileName) return null;
+    const bytes = yield* renderProjectLucideIcon(claims.icon).pipe(
+      Effect.tapError((cause) => Effect.logError("Failed to render project Lucide icon.", cause)),
+      Effect.orElseSucceed(() => null),
+    );
+    return bytes
+      ? ({ kind: "bytes", bytes, mimeType: "image/svg+xml" } satisfies ResolvedAsset)
+      : null;
   }
 
   if (claims.kind === "native-app-icon") {
