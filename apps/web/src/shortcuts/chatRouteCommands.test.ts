@@ -8,6 +8,7 @@ import * as previewActions from "../components/preview/previewActionBus";
 import * as settings from "../hooks/useSettings";
 import * as storage from "../hooks/useLocalStorage";
 import * as threadActions from "../lib/chatThreadActions";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import * as entities from "../state/entities";
 import * as projectsState from "../state/projects";
 import * as session from "../state/session";
@@ -75,6 +76,26 @@ describe("new thread commands", () => {
       });
     }
   });
+});
+
+it.each([true, false])("opens Pull Requests only when supported (%s)", (supported) => {
+  using _registry = vi.spyOn(appAtomRegistry, "get").mockReturnValue(supported);
+  using register = vi.spyOn(dispatcher, "registerCommands").mockReturnValue(() => {});
+  const navigate = vi.fn().mockResolvedValue(undefined);
+  const router = { state: { matches: [] }, navigate } as unknown as AnyRouter;
+  using stack = new DisposableStack();
+  stack.defer(installChatRouteCommands(router));
+  const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as KeyboardEvent;
+
+  register.mock.calls[0]![0]["pullRequests.open"]!(event);
+
+  if (supported) {
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith({ to: "/pull-requests", search: expect.any(Object) });
+  } else {
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  }
 });
 
 describe("preview commands", () => {

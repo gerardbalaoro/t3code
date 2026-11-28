@@ -6,7 +6,7 @@ import {
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { page } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 import { render } from "../../../test/render";
@@ -31,6 +31,25 @@ const sizeChanged = (height: number) => ({
 });
 
 describe("HtmlRenderDocument", () => {
+  it("forwards tab cycling and numbered tab shortcuts from the focused frame", async () => {
+    const html = injectHtmlRenderBootstrap("<!doctype html><button>Focus report</button>");
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    using _url = { [Symbol.dispose]: () => URL.revokeObjectURL(url) };
+    await using screen = await render(<HtmlRenderDocument src={url} title="Report keys" />);
+    const forwarded: string[] = [];
+    const onKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLIFrameElement) forwarded.push(event.key);
+    };
+    window.addEventListener("keydown", onKey);
+    using _listener = {
+      [Symbol.dispose]: () => window.removeEventListener("keydown", onKey),
+    };
+    await page.frameLocator(screen.getByTitle("Report keys")).getByRole("button").click();
+    await userEvent.keyboard("{Control>}2{Tab}{/Control}");
+
+    await expect.poll(() => forwarded).toEqual(["2", "Tab"]);
+  });
+
   it("reports the page's first height and ignores messages from other windows", async () => {
     using pageUrl = (() => {
       const page = `<script>parent.postMessage(${JSON.stringify(sizeChanged(321))}, "*");</script>`;

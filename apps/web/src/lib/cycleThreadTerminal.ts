@@ -1,6 +1,11 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
-import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectThreadRightPanelState,
+  surfacesInPlacement,
+  useRightPanelStore,
+  type SurfacePlacement,
+} from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { focusTerminal, type TerminalFocusOwner } from "./terminalFocus";
 
@@ -8,14 +13,16 @@ export function cycleThreadTerminal(
   threadRef: ScopedThreadRef,
   owner: TerminalFocusOwner,
   direction: "previous" | "next",
+  placement: SurfacePlacement = "sidebar",
 ): boolean {
   const drawer = useTerminalUiStateStore.getState();
   const panels = useRightPanelStore.getState();
   const drawerState = selectThreadTerminalUiState(drawer.terminalUiStateByThreadKey, threadRef);
   const panelState = selectThreadRightPanelState(panels.byThreadKey, threadRef);
-  const activeSurface = panelState.surfaces.find(
-    (surface) => surface.id === panelState.activeSurfaceId,
-  );
+  const surfaces = surfacesInPlacement(panelState, placement);
+  const activeSurfaceId =
+    placement === "main" ? panelState.mainActiveSurfaceId : panelState.activeSurfaceId;
+  const activeSurface = surfaces.find((surface) => surface.id === activeSurfaceId);
   const terminalOrder = new Map(drawerState.terminalIds.map((id, index) => [id, index]));
   const groupRank = (ids: readonly string[]) =>
     Math.min(...ids.map((id) => terminalOrder.get(id) ?? Number.POSITIVE_INFINITY));
@@ -24,9 +31,7 @@ export function cycleThreadTerminal(
       ? drawerState.terminalGroups
           .toSorted((left, right) => groupRank(left.terminalIds) - groupRank(right.terminalIds))
           .flatMap((group) => group.terminalIds)
-      : panelState.surfaces.flatMap((surface) =>
-          surface.kind === "terminal" ? surface.terminalIds : [],
-        );
+      : surfaces.flatMap((surface) => (surface.kind === "terminal" ? surface.terminalIds : []));
   const activeTerminalId =
     owner === "drawer"
       ? drawerState.activeTerminalId
@@ -34,7 +39,10 @@ export function cycleThreadTerminal(
         ? activeSurface.activeTerminalId
         : null;
   const index = activeTerminalId === null ? -1 : terminalIds.indexOf(activeTerminalId);
-  if (index === -1 || (owner === "drawer" ? !drawerState.terminalOpen : !panelState.isOpen))
+  if (
+    index === -1 ||
+    (owner === "drawer" ? !drawerState.terminalOpen : placement === "sidebar" && !panelState.isOpen)
+  )
     return false;
   const offset = direction === "next" ? 1 : -1;
   const terminalId = terminalIds[(index + offset + terminalIds.length) % terminalIds.length];
@@ -42,7 +50,7 @@ export function cycleThreadTerminal(
   if (owner === "drawer") {
     drawer.setActiveTerminal(threadRef, terminalId);
   } else {
-    const surface = panelState.surfaces.find(
+    const surface = surfaces.find(
       (surface) => surface.kind === "terminal" && surface.terminalIds.includes(terminalId),
     );
     if (!surface) return false;

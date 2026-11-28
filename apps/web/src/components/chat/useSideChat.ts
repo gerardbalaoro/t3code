@@ -14,7 +14,11 @@ import { useRef } from "react";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { useRightPanelStore } from "../../rightPanelStore";
+import {
+  useRightPanelStore,
+  withSurfacePlacement,
+  type SurfacePlacement,
+} from "../../rightPanelStore";
 import { readThreadShell, waitForThreadShell } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -56,7 +60,11 @@ export function useSideChat(input: {
     const error = squashAtomCommandFailure(failure);
     input.onError(thrownErrorMessage(error, m) ?? fallback);
   };
-  const start = async (threadRef: ScopedThreadRef, message: SideChatMessage | undefined) => {
+  const start = async (
+    threadRef: ScopedThreadRef,
+    message: SideChatMessage | undefined,
+    placement: SurfacePlacement,
+  ) => {
     const { runtimeMode, modelSelection } = input.readSettings();
     const targetThreadId = newThreadId();
     const fork = await forkSideChat({
@@ -120,14 +128,16 @@ export function useSideChat(input: {
     } else if (modelSelection !== undefined) {
       useComposerDraftStore.getState().setModelSelection(targetRef, modelSelection);
     }
-    useRightPanelStore.getState().openThread(threadRef, targetThreadId);
+    withSurfacePlacement(placement, () =>
+      useRightPanelStore.getState().openThread(threadRef, targetThreadId),
+    );
     return true;
   };
-  const open = async (message?: SideChatMessage) => {
+  const open = async (message?: SideChatMessage, placement: SurfacePlacement = "sidebar") => {
     const { threadRef } = input;
     if (!threadRef || pendingRef.current) return false;
     pendingRef.current = true;
-    return start(threadRef, message).finally(() => {
+    return start(threadRef, message, placement).finally(() => {
       pendingRef.current = false;
     });
   };

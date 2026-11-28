@@ -14,6 +14,17 @@ Customize T3 Code's theme, light/dark appearance, math rendering, motion, and cu
 
 Git-backed projects show branch and worktree controls below the composer before the first message. Turn on **Settings → Appearance → Composer context** (web and desktop) to keep those controls visible after the thread starts.
 
+## Views
+
+On web and desktop, you can open views such as Files, Diff, Browser, and Terminal in two places.
+
+- For a full-width tab, click **+** next to the thread title. Select a view from the menu.
+- To see a view beside the thread, click the right sidebar button. If the sidebar is empty, select
+  a view from the list. To add another view, click **+** in the sidebar.
+
+Click the thread title to return to the conversation. The thread keeps its draft and scroll
+position when you switch tabs. To close a view, hover over its tab and click **×**.
+
 ## Math
 
 Turn on **Settings → Appearance → Render math** (per device) to render LaTeX in messages and Markdown previews on web, desktop, and mobile.

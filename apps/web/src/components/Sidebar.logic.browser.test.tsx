@@ -4,12 +4,14 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 import { act, fakeTimers, render } from "../../test/render";
+import { useRightPanelStore, withSurfacePlacement } from "../rightPanelStore";
 import { registerModelPickerContent } from "../modelPickerVisibility";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import {
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
   useSnoozeWakeClock,
   useThreadJumpHintsVisible,
+  threadShortcutContext,
 } from "./Sidebar.logic";
 
 const MOUNTED_AT_MS = Date.parse("2026-10-24T08:00:00.000Z");
@@ -78,6 +80,34 @@ describe("useThreadJumpHintsVisible", () => {
     await expect.element(output).toHaveTextContent("hidden");
     await act(() => vi.advanceTimersByTime(1));
     await expect.element(output).toHaveTextContent("shown");
+    await userEvent.keyboard(`{/${modifier}}`);
+  });
+
+  it("keeps Mod+1 on the thread tab and hides thread jump hints when other tabs are open", async () => {
+    const store = useRightPanelStore.getState();
+    withSurfacePlacement("main", () => {
+      store.open(ROUTE_THREAD_REF, "files");
+      store.close(ROUTE_THREAD_REF);
+    });
+    using _cleanup = { [Symbol.dispose]: () => store.removeThread(ROUTE_THREAD_REF) };
+    const keybindings = compileResolvedKeybindingsConfig([
+      { key: "mod+1", command: "thread.jump.1" },
+      { key: "mod+1", command: "tab.thread", when: "surfaceTabReturn" },
+    ]);
+    const modifier = isMacPlatform(navigator.platform) ? "Meta" : "Control";
+    await using screen = await render(
+      <div data-chat-column>
+        <input aria-label="Composer" />
+        <JumpHints keybindings={keybindings} />
+      </div>,
+      { router: false },
+    );
+    await screen.getByRole("textbox", { name: "Composer" }).click();
+    expect(threadShortcutContext(ROUTE_THREAD_REF).surfaceTabReturn).toBe(true);
+    using _timers = fakeTimers();
+    await userEvent.keyboard(`{${modifier}>}`);
+    await act(() => vi.advanceTimersByTime(THREAD_JUMP_HINT_SHOW_DELAY_MS));
+    await expect.element(screen.getByRole("status")).toHaveTextContent("hidden");
     await userEvent.keyboard(`{/${modifier}}`);
   });
 

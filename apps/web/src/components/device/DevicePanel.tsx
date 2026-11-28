@@ -15,6 +15,8 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
   type RightPanelSurface,
+  type SurfacePlacement,
+  withSurfacePlacement,
 } from "~/rightPanelStore";
 import { Button } from "~/components/ui/button";
 import { DiscoveryList } from "~/components/ui/discovery-list";
@@ -51,9 +53,11 @@ export function DevicePanel(props: {
   readonly threadRef: ScopedThreadRef;
   readonly surface: Extract<RightPanelSurface, { kind: "device" }>;
   readonly visible: boolean;
+  readonly placement?: SurfacePlacement;
   readonly onDismissSetup: () => void;
 }) {
   const { environmentId, threadId } = props.threadRef;
+  const placement = props.placement ?? "sidebar";
   const gt = useGT();
   const { state, loaded, error: stateError, refresh: refreshState } = useDeviceState(environmentId);
   const list = useAtomCommand(deviceEnvironment.list, { reportFailure: false });
@@ -139,12 +143,14 @@ export function DevicePanel(props: {
     if (result._tag === "Failure") settleOperation(formatEnvironmentQueryError(result.cause));
     else {
       // The server opened the device for the starting thread, so its tab opens there.
-      useRightPanelStore.getState().openDevice(props.threadRef, {
-        hostId: result.value.hostId,
-        deviceId: result.value.deviceId,
-        platform: device.platform,
-        name: device.name,
-      });
+      withSurfacePlacement(placement, () =>
+        useRightPanelStore.getState().openDevice(props.threadRef, {
+          hostId: result.value.hostId,
+          deviceId: result.value.deviceId,
+          platform: device.platform,
+          name: device.name,
+        }),
+      );
       settleOperation(null);
     }
   };
@@ -179,7 +185,7 @@ export function DevicePanel(props: {
       platform: activeDevice.platform,
       name: activeDevice.name,
     });
-    useRightPanelStore.getState().close(props.threadRef);
+    withSurfacePlacement(placement, () => useRightPanelStore.getState().close(props.threadRef));
   };
 
   const closeSurface = () => {

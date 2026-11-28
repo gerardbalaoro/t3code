@@ -220,6 +220,7 @@ export function createWorkspaceFocusController(doc: Document) {
               element.dataset.workspaceArea === "pull-requests" || element.matches("main"),
           ) ??
           areas.find((element) => element.dataset.workspaceArea === "conversation") ??
+          areas.find((element) => element.dataset.workspaceArea === "surface-tab") ??
           areas.find((element) => element.dataset.workspaceArea === "panel"))
         : areas.find((element) => element.dataset.workspaceArea === name);
     if (!area) return false;
@@ -400,6 +401,8 @@ export function startWorkspaceFocus(router: AnyRouter): () => void {
       const before = previous.byThreadKey[threadKey];
       if (next?.isOpen && (!before?.isOpen || next.activeSurfaceId !== before.activeSurfaceId))
         requestWorkspaceFocus({ area: "panel" });
+      if (next?.mainActiveSurfaceId && next.mainActiveSurfaceId !== before?.mainActiveSurfaceId)
+        requestWorkspaceFocus({ area: "surface-tab" });
     }
   });
   const stopRoute = router.subscribe("onResolved", ({ fromLocation, toLocation }) => {

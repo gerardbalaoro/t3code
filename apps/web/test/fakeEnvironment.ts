@@ -439,6 +439,19 @@ let pendingAssetUrls: Array<Deferred.Deferred<AssetCreateUrlResult>> = [];
 let sequence = 1;
 let vcsStatusSubscriber: Queue.Queue<VcsStatusStreamEvent> | null = null;
 
+function shellSnapshot(): OrchestrationV2ShellStreamItem {
+  return {
+    kind: "snapshot",
+    snapshot: {
+      schemaVersion: 1,
+      snapshotSequence: sequence,
+      projects,
+      threads: threads.filter((thread) => !thread.olderSettled).map(shellOf),
+      archivedThreads: [],
+    },
+  };
+}
+
 const subscribe = <A>(first: ReadonlyArray<A>, register?: (queue: Queue.Queue<A>) => () => void) =>
   Stream.unwrap(
     Effect.gen(function* () {
@@ -497,19 +510,7 @@ const handlers: Record<string, (input: never) => unknown> = {
     }),
   [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: () =>
     subscribe<OrchestrationV2ShellStreamItem>(
-      [
-        {
-          kind: "snapshot",
-          snapshot: {
-            schemaVersion: 1,
-            snapshotSequence: sequence,
-            projects,
-            threads: threads.filter((thread) => !thread.olderSettled).map(shellOf),
-            archivedThreads: [],
-          },
-        },
-        { kind: "synchronized" },
-      ],
+      [shellSnapshot(), { kind: "synchronized" }],
       (queue) => {
         shellSubscriber = queue;
         return () => {
@@ -716,6 +717,23 @@ export function answerRpc(method: string, handler: (input: never) => unknown): D
       else delete handlers[method];
     },
   };
+}
+
+/** Sends the current fixtures to an app that kept its shell subscription between renders. */
+export async function emitShellSnapshot(): Promise<void> {
+  if (shellSubscriber === null) throw new Error("No shell subscription");
+  sequence += 1;
+  await Effect.runPromise(Queue.offer(shellSubscriber, shellSnapshot()));
+}
+
+export async function emitTerminalMetadata(event: TerminalMetadataStreamEvent): Promise<void> {
+  if (terminalMetadataSubscriber === null) throw new Error("No terminal metadata subscription");
+  await Effect.runPromise(Queue.offer(terminalMetadataSubscriber, event));
+}
+
+/** Whether the app holds a live subscription to the thread, so events reach it. */
+export function isThreadSubscribed(threadId: ThreadId): boolean {
+  return threadSubscribers.has(threadId);
 }
 
 /** Delivers one domain event, such as a run or turn-item update, to the thread's subscription. */

@@ -18,6 +18,7 @@ import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import {
   hostRightPanel,
   selectActiveRightPanelSurface,
+  selectThreadRightPanelState,
   useRightPanelStore,
 } from "~/rightPanelStore";
 import {
@@ -240,6 +241,25 @@ describe("openUrlInPreview from a link", () => {
       ).toBe("preview");
     },
   );
+
+  it("opens a foreground browser link in its source pane without changing the sidebar", async () => {
+    useRightPanelStore.getState().open(threadRef, "diff");
+
+    await openUrlInPreview({
+      openPreview: async () => AsyncResult.success(snapshot),
+      threadRef,
+      url: "https://t3.chat/",
+      placement: "main",
+    });
+
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef),
+    ).toMatchObject({
+      activeSurfaceId: "diff",
+      mainActiveSurfaceId: `browser:${snapshot.tabId}`,
+      mainSurfaceIds: [`browser:${snapshot.tabId}`],
+    });
+  });
 
   // regression: #16961 a background link open switched the active preview tab
   it("keeps the current tab active for a background open", async () => {

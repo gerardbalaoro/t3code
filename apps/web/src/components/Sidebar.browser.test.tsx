@@ -208,7 +208,7 @@ describe("sidebar numbered jumps", () => {
     stack.defer(() => __setClientSettingsForTests(previousSettings));
     __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
     using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
-    const web = project("web");
+    const web = project("sidebar-numbered-jumps");
     vi.mocked(useProjects).mockReturnValue([web]);
     const thread = threadShell(web.id, 0);
     vi.mocked(useQuietThreadShells).mockReturnValue([thread]);

@@ -66,14 +66,14 @@ import {
   usePreviewMiniPlayerStore,
 } from "~/previewMiniPlayerStore";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
-import { useRightPanelStore } from "~/rightPanelStore";
+import { type SurfacePlacement, useRightPanelStore, withSurfacePlacement } from "~/rightPanelStore";
 
 import { effectiveShortcutsForCommand, shortcutLabelForCommand } from "~/keybindings";
 import { randomUUID } from "~/lib/utils";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { PreviewAnnotationSpeech } from "./PreviewAnnotationSpeech";
 import { previewBridge } from "./previewBridge";
-import { subscribePreviewAction } from "./previewActionBus";
+import { registerPreviewActionView, type PreviewAction } from "./previewActionBus";
 import { closePreviewSession } from "./closePreviewSession";
 import { openPreviewSession } from "./openPreviewSession";
 import { showPreviewPopup } from "./showPreviewPopup";
@@ -120,6 +120,7 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  placement?: SurfacePlacement;
   onSendAnnotation?: (
     annotation: PreviewAnnotationPayload,
     image: ComposerImageAttachment | null,
@@ -185,10 +186,12 @@ export function PreviewView({
   tabId: requestedTabId,
   configuredUrls,
   visible,
+  placement = "sidebar",
   onSendAnnotation,
 }: Props) {
   const gt = useGT();
   const messages = useMessages();
+  const viewRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const [find, setFind] = useState<{ tabId: string; requestId: number } | null>(null);
   const [pickActive, setPickActive] = useState(false);
@@ -221,7 +224,7 @@ export function PreviewView({
 
   usePreviewSession(threadRef);
 
-  const tabId = requestedTabId ?? previewState.activeTabId;
+  const tabId = requestedTabId === undefined ? previewState.activeTabId : requestedTabId;
   const runtimeTabId = tabId
     ? previewRuntimeTabId(threadRef, previewState.serverEpoch, tabId)
     : null;
@@ -303,9 +306,11 @@ export function PreviewView({
         });
       }
     }
-    return result._tag === "Success"
-      ? (result.value.profileId ?? DEFAULT_BROWSER_PROFILE_ID)
-      : null;
+    if (result._tag === "Failure") return null;
+    withSurfacePlacement(placement, () =>
+      useRightPanelStore.getState().openBrowser(threadRef, result.value.tabId),
+    );
+    return result.value.profileId ?? DEFAULT_BROWSER_PROFILE_ID;
   };
 
   // Incognito visits stay out of the project's persisted history.
@@ -506,8 +511,10 @@ export function PreviewView({
       });
       return;
     }
-    useRightPanelStore.getState().openBrowser(threadRef, result.value.tabId);
-    await closePreviewSession({ closePreview, snapshot, tabId, threadRef });
+    withSurfacePlacement(placement, () =>
+      useRightPanelStore.getState().openBrowser(threadRef, result.value.tabId),
+    );
+    await closePreviewSession({ closePreview, snapshot, tabId, threadRef, placement });
   };
 
   const handlePictureInPicture = () => {
@@ -517,7 +524,7 @@ export function PreviewView({
       return;
     }
     usePreviewMiniPlayerStore.getState().open(threadRef, browserMiniPlayerSource(tabId));
-    useRightPanelStore.getState().close(threadRef);
+    withSurfacePlacement(placement, () => useRightPanelStore.getState().close(threadRef));
   };
 
   const desktopCall = (op: ((tabId: string) => Promise<void>) | undefined) => () => {
@@ -941,55 +948,41 @@ export function PreviewView({
   }, [runtimeTabId]);
 
   // Subscribe only while visible; ChatView always owns URL-aware toggle-panel handling.
-  const onPreviewAction = useEffectEvent(
-    (action: Parameters<Parameters<typeof subscribePreviewAction>[0]>[0]) => {
-      switch (action) {
-        case "refresh":
-          handleRefresh();
-          return;
-        case "back":
-          handleBack();
-          return;
-        case "forward":
-          handleForward();
-          return;
-        case "focus-url":
-          urlInputRef.current?.focus();
-          return;
-        case "zoom-in":
-          handleZoomIn();
-          return;
-        case "zoom-out":
-          handleZoomOut();
-          return;
-        case "reset-zoom":
-          handleResetZoom();
-          return;
-        case "find":
-          handleFind();
-          return;
-        case "toggle-panel":
-          return;
-      }
-    },
-  );
+  const onPreviewAction = useEffectEvent((action: PreviewAction) => {
+    switch (action) {
+      case "refresh":
+        handleRefresh();
+        return;
+      case "back":
+        handleBack();
+        return;
+      case "forward":
+        handleForward();
+        return;
+      case "focus-url":
+        urlInputRef.current?.focus();
+        return;
+      case "zoom-in":
+        handleZoomIn();
+        return;
+      case "zoom-out":
+        handleZoomOut();
+        return;
+      case "reset-zoom":
+        handleResetZoom();
+        return;
+      case "find":
+        handleFind();
+        return;
+      case "toggle-panel":
+        return;
+    }
+  });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to preview and desktop menu actions while the view is visible
   useEffect(() => {
-    if (!visible) return;
-    const unsubscribeAction = subscribePreviewAction((action) => onPreviewAction(action));
-    // A focused page swallows its own keydowns, so the desktop forwards these
-    // shortcuts from the guest as menu actions instead.
-    const unsubscribeMenu = window.desktopBridge?.onMenuAction((action) => {
-      if (action === "preview.focusUrl") onPreviewAction("focus-url");
-      if (action === "preview.zoomIn") onPreviewAction("zoom-in");
-      if (action === "preview.zoomOut") onPreviewAction("zoom-out");
-      if (action === "preview.resetZoom") onPreviewAction("reset-zoom");
-      if (action === "preview.find") onPreviewAction("find");
-    });
-    return () => {
-      unsubscribeAction();
-      unsubscribeMenu?.();
-    };
+    const view = viewRef.current;
+    if (visible && view)
+      return registerPreviewActionView(view, (action) => onPreviewAction(action));
   }, [visible]);
 
   const desktopSlotShown = Boolean(
@@ -1021,7 +1014,10 @@ export function PreviewView({
 
   return (
     <div
+      ref={viewRef}
       className="flex min-h-0 flex-1 flex-col bg-background"
+      data-preview-runtime-tab={runtimeTabId ?? undefined}
+      data-preview-placement={placement}
       data-thread-key={scopedThreadKey(threadRef)}
       data-preview-view
     >
@@ -1151,7 +1147,9 @@ export function PreviewView({
                 onControl={(control) =>
                   setServerControlledTabId(control?.controller === "you" ? runtimeTabId : null)
                 }
-                onPopup={(popupTabId) => showPreviewPopup(threadRef, popupTabId, "panel")}
+                onPopup={(popupTabId) =>
+                  showPreviewPopup(threadRef, popupTabId, "panel", placement)
+                }
                 // Stays connected under the empty state so a URL picked there reaches the page.
                 className="absolute inset-0 h-full w-full"
               />

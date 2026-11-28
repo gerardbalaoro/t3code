@@ -22,6 +22,10 @@ import { type ThreadPanelPresentation } from "../../rightPanelLayout";
 import {
   selectThreadPanelOpen,
   type RightPanelSurface,
+  type SurfacePlacement,
+  withSurfacePlacement,
+  surfacePlacementOf,
+  selectThreadRightPanelState,
   useRightPanelStore,
 } from "../../rightPanelStore";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
@@ -109,11 +113,16 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     }
   };
   const onToggleDiffStable = useStableCallback(onToggleDiff);
-  const createBrowserSurface = (profileId?: string, duplicateFrom?: PreviewSessionSnapshot) => {
+  const createBrowserSurface = (
+    profileId?: string,
+    duplicateFrom?: PreviewSessionSnapshot,
+    placement: SurfacePlacement = "sidebar",
+  ) => {
     if (!activeThreadRef || !canOperatePreview) return;
     void addBrowserSurface({
       threadRef: activeThreadRef,
       openPreview,
+      placement,
       ...(profileId === undefined ? {} : { profileId }),
       ...(duplicateFrom === undefined ? {} : { duplicateFrom }),
     }).then((result) => {
@@ -130,10 +139,10 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       }
     });
   };
-  const duplicateBrowserSurface = (surface: RightPanelSurface) => {
+  const duplicateBrowserSurface = (surface: RightPanelSurface, placement?: SurfacePlacement) => {
     if (surface.kind !== "preview" || !surface.resourceId) return;
     const snapshot = activePreviewState.sessions[surface.resourceId];
-    if (snapshot) createBrowserSurface(undefined, snapshot);
+    if (snapshot) createBrowserSurface(undefined, snapshot, placement);
   };
   const duplicateBrowserSurfaceStable = useStableCallback(duplicateBrowserSurface);
   const createBrowserSurfaceStable = useStableCallback(createBrowserSurface);
@@ -158,13 +167,15 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     useRightPanelStore.getState().open(activeThreadRef, "pull-requests");
   };
   const addPullRequestsSurfaceStable = useStableCallback(addPullRequestsSurface);
-  const addDeviceSurface = () => {
+  const addDeviceSurface = (placement: SurfacePlacement = "sidebar") => {
     if (!activeThreadRef) return;
     if (!deviceState.onboardingCompleted || deviceState.hostStatus === "disabled") {
-      openDeviceSetupDialog(scopedThreadKey(activeThreadRef));
+      openDeviceSetupDialog(scopedThreadKey(activeThreadRef), placement);
       return;
     }
-    useRightPanelStore.getState().open(activeThreadRef, "device");
+    withSurfacePlacement(placement, () =>
+      useRightPanelStore.getState().open(activeThreadRef, "device"),
+    );
   };
   const addDeviceSurfaceStable = useStableCallback(addDeviceSurface);
   const openFileSurface = (relativePath: string) => {
@@ -220,14 +231,19 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
       const kind = sideThreadKindOf(
         readThreadShell(scopeThreadRef(activeThreadRef.environmentId, surface.threadId)),
       );
+      const panelState = selectThreadRightPanelState(
+        useRightPanelStore.getState().byThreadKey,
+        activeThreadRef,
+      );
+      const area = surfacePlacementOf(panelState, surface.id) === "main" ? "surface-tab" : "panel";
       // A thread with no composer, or one not known yet, takes focus as any other tab does.
       requestWorkspaceFocus(
         kind !== null && sideThreadComposer(kind) === "composer"
           ? {
-              area: "panel",
+              area,
               selector: `[data-side-chat-pane="${CSS.escape(surface.threadId)}"] [data-workspace-area="composer"] [contenteditable="true"]`,
             }
-          : { area: "panel" },
+          : { area },
       );
     }
     if (surface.kind === "diff" && !diffOpen) {

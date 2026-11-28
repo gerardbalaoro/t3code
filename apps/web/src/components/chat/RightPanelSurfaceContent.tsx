@@ -17,7 +17,12 @@ import SideThreadPane from "./SideThreadPane";
 import type { ComposerImageAttachment, DraftId } from "../../composerDraftStore";
 import type { ShortcutMatchContext } from "../../keybindings";
 import type { SideChatParentPanel } from "../../lib/sideChatPane";
-import { type RightPanelSurface, useRightPanelStore } from "../../rightPanelStore";
+import {
+  type RightPanelSurface,
+  type SurfacePlacement,
+  useRightPanelStore,
+  withSurfacePlacement,
+} from "../../rightPanelStore";
 import {
   PersistentThreadTerminalPanel,
   type PersistentThreadTerminalPanelProps,
@@ -66,6 +71,7 @@ interface RightPanelFileProps {
 export function RightPanelSurfaceContent(props: {
   readonly surface: RightPanelSurface | null;
   readonly activeSurfaceId: string | null;
+  readonly placement?: SurfacePlacement;
   readonly threadRef: ScopedThreadRef;
   readonly environmentId: EnvironmentId;
   readonly visible: boolean;
@@ -87,7 +93,7 @@ export function RightPanelSurfaceContent(props: {
   readonly files: RightPanelFileProps;
   readonly sideChatParentPanel: SideChatParentPanel;
 }) {
-  const { surface, threadRef, visible, onCloseSurface } = props;
+  const { surface, threadRef, visible, onCloseSurface, placement = "sidebar" } = props;
   const gt = useGT();
   if (surface === null) return null;
   switch (surface.kind) {
@@ -100,6 +106,7 @@ export function RightPanelSurfaceContent(props: {
             tabId={surface.resourceId}
             configuredUrls={props.configuredPreviewUrls}
             visible={visible}
+            placement={placement}
             onSendAnnotation={props.onSendAnnotation}
           />
         </Suspense>
@@ -145,15 +152,17 @@ export function RightPanelSurfaceContent(props: {
             (surface.environmentId as EnvironmentId | undefined) ?? props.environmentId
           }
           onSelectPullRequest={(reference) => {
-            useRightPanelStore.getState().openPullRequest(threadRef, {
-              ...(surface.environmentId === undefined
-                ? {}
-                : { environmentId: surface.environmentId }),
-              projectId: reference.projectId,
-              repository: reference.repository,
-              number: reference.number,
-              ...(reference.host ? { host: reference.host } : {}),
-            });
+            withSurfacePlacement(placement, () =>
+              useRightPanelStore.getState().openPullRequest(threadRef, {
+                ...(surface.environmentId === undefined
+                  ? {}
+                  : { environmentId: surface.environmentId }),
+                projectId: reference.projectId,
+                repository: reference.repository,
+                number: reference.number,
+                ...(reference.host ? { host: reference.host } : {}),
+              }),
+            );
           }}
           threadRef={threadRef}
           reference={{
@@ -209,29 +218,33 @@ export function RightPanelSurfaceContent(props: {
           }}
           threadRef={threadRef}
           onSelectPullRequest={(reference) => {
-            useRightPanelStore.getState().openPullRequest(threadRef, {
-              ...(surface.environmentId === undefined
-                ? {}
-                : { environmentId: surface.environmentId }),
-              projectId: reference.projectId,
-              repository: reference.repository,
-              number: reference.number,
-              ...(reference.host ? { host: reference.host } : {}),
-            });
+            withSurfacePlacement(placement, () =>
+              useRightPanelStore.getState().openPullRequest(threadRef, {
+                ...(surface.environmentId === undefined
+                  ? {}
+                  : { environmentId: surface.environmentId }),
+                projectId: reference.projectId,
+                repository: reference.repository,
+                number: reference.number,
+                ...(reference.host ? { host: reference.host } : {}),
+              }),
+            );
           }}
           onSelectIssue={({ host, ...reference }) => {
-            useRightPanelStore.getState().openIssue(threadRef, {
-              ...(surface.environmentId === undefined
-                ? {}
-                : { environmentId: surface.environmentId }),
-              ...reference,
-              ...(host ? { host } : {}),
-            });
+            withSurfacePlacement(placement, () =>
+              useRightPanelStore.getState().openIssue(threadRef, {
+                ...(surface.environmentId === undefined
+                  ? {}
+                  : { environmentId: surface.environmentId }),
+                ...reference,
+                ...(host ? { host } : {}),
+              }),
+            );
           }}
         />
       );
     case "pull-requests":
-      return <ThreadPullRequestsPanel threadRef={threadRef} />;
+      return <ThreadPullRequestsPanel threadRef={threadRef} placement={placement} />;
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (
@@ -261,9 +274,10 @@ export function RightPanelSurfaceContent(props: {
             key={surface.id}
             surface={surface}
             visible={visible}
+            placement={placement}
             onDismissSetup={() => {
               props.onCloseSurface(surface);
-              useRightPanelStore.getState().show(threadRef);
+              if (placement === "sidebar") useRightPanelStore.getState().show(threadRef);
             }}
           />
         </Suspense>

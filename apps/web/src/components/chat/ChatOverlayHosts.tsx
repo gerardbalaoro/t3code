@@ -12,7 +12,7 @@ import { T, Var } from "gt-react";
 import { Atom } from "effect/reactivity";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { useRightPanelStore } from "~/rightPanelStore";
+import { type SurfacePlacement, useRightPanelStore, withSurfacePlacement } from "~/rightPanelStore";
 import { DeviceSetup } from "../device/DeviceSetup";
 import { PullRequestThreadDialog } from "../PullRequestThreadDialog";
 import {
@@ -102,10 +102,13 @@ export function PullRequestThreadDialogHost(props: {
   );
 }
 
-const deviceSetupDialogAtom = makeThreadOverlayAtom<true>("device-setup-dialog");
+const deviceSetupDialogAtom = makeThreadOverlayAtom<SurfacePlacement>("device-setup-dialog");
 
-export function openDeviceSetupDialog(threadKey: string): void {
-  appAtomRegistry.set(deviceSetupDialogAtom, { threadKey, value: true });
+export function openDeviceSetupDialog(
+  threadKey: string,
+  placement: SurfacePlacement = "sidebar",
+): void {
+  appAtomRegistry.set(deviceSetupDialogAtom, { threadKey, value: placement });
 }
 
 export function DeviceSetupDialogHost(props: {
@@ -113,11 +116,11 @@ export function DeviceSetupDialogHost(props: {
   readonly threadRef: ScopedThreadRef | null;
   readonly state: DeviceServiceState;
 }) {
-  const open = useThreadOverlay(deviceSetupDialogAtom, props.threadKey) !== null;
+  const placement = useThreadOverlay(deviceSetupDialogAtom, props.threadKey);
   const { threadRef } = props;
   return (
     <Dialog
-      open={open}
+      open={placement !== null}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) closeThreadOverlay(deviceSetupDialogAtom);
       }}
@@ -128,7 +131,11 @@ export function DeviceSetupDialogHost(props: {
             environmentId={threadRef.environmentId}
             state={props.state}
             onComplete={() => {
-              useRightPanelStore.getState().open(threadRef, "device");
+              if (placement !== null) {
+                withSurfacePlacement(placement, () =>
+                  useRightPanelStore.getState().open(threadRef, "device"),
+                );
+              }
               closeThreadOverlay(deviceSetupDialogAtom);
             }}
           />
